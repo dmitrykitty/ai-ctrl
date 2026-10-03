@@ -1,0 +1,9 @@
+schema_version: 1
+policy_version: t03
+default_action: BLOCK
+agents:
+  claude:
+    enabled: true
+llm:
+  messages: ALLOW
+  count_tokens: ALLOW
