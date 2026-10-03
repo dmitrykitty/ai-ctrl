@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aictrl"
+version = "0.1.0"
+description = "AI Control Layer foundation for isolated coding agents"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
+    "pydantic>=2.10,<3",
+    "pyyaml>=6.0.2,<7",
+    "httpx>=0.28,<1",
+    "typer>=0.15,<1",
+]
+
+[project.scripts]
+aictrl = "aictrl.cli.main:app"
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aictrl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
