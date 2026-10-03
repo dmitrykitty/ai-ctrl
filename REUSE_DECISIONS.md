@@ -4,7 +4,7 @@ Approved source: [mattolson/agent-sandbox](https://github.com/mattolson/agent-sa
 
 Reuse only necessary agent image, official Claude installer, proxy CA/bootstrap, firewall, workspace, and named provider-state assets. Inspect source before adaptation; record each copied or adapted file in `OPEN_SOURCE.md`. Do not import unrelated upstream services or accept broad Docker-subnet firewall access.
 
-Use FastAPI/Python, Pydantic, HTTPX, PyYAML, Typer, uvicorn, pytest, and standard-library SQLite for the foundation. Defer LiteLLM, Presidio, MCP, and mitmproxy integration to their actual milestones. Do not add Redis, React, Kafka, OPA, or a second service framework.
+Use FastAPI/Python, Pydantic, HTTPX, PyYAML, Typer, uvicorn, pytest, and standard-library SQLite for the foundation. mitmproxy is integrated in T02; defer LiteLLM, Presidio and MCP to their designated milestones. Do not add Redis, React, Kafka, OPA, or a second service framework.
 
 ## T01 decisions
 
@@ -18,3 +18,12 @@ Use FastAPI/Python, Pydantic, HTTPX, PyYAML, Typer, uvicorn, pytest, and standar
 - Use uv 0.12.22, Python 3.12.15, a committed hash-bearing `uv.lock`, and a pinned hatchling build backend. SQLite remains standard-library only. No custom OAuth bridge, model request, Codex integration, launcher, gateway, policy engine, or audit store is implemented in T01.
 
 Version pins and observed image identities are in `docker/images.lock.json`. Authentication completion is recorded separately from image/version and volume verification.
+
+## T02 decisions
+
+- Adapt approved upstream proxy Dockerfile, CA export entrypoint and enforcement-hook pattern, retaining MIT notices. Pin the official mitmproxy image by digest; observed version is 12.2.3. Keep exact HTTP/CONNECT/server-connect destination admission and forwarding; omit upstream credential injection, dynamic reload, central policy and content inspection. References: [events](https://docs.mitmproxy.org/stable/api/events.html), [CA files](https://docs.mitmproxy.org/stable/concepts/certificates/), [options](https://docs.mitmproxy.org/stable/concepts/options/).
+- Reuse the existing firewall and Compose approach with unique host-rendered sessions. Runtime proxy has a private CA volume and a separate public export. Agent networking permits only exact infrastructure TCP destinations and fails closed. Authentication keeps its distinct restricted transport.
+- Adapt bootstrap to positive host UID/GID, no-follow provider-state preparation and complete native capability drop. Avoid usermod home traversal and preserve workspace ownership. Setup-only DAC_OVERRIDE handles state ownership, and KILL supports trusted init signal forwarding.
+- Implement host supervisor, static destination validation, workspace validation and deterministic probes as new project code. No additional host service framework or runtime Python dependency was added; mitmproxy dependencies stay in its Docker image.
+- Native UI preference preparation is new code, edits only provider-volume configuration, opens no credential file, and preserves workspace trust. The observed onboarding/login mismatch is also described in the [upstream issue](https://github.com/anthropics/claude-code/issues/67149).
+- EGRESS_ONLY is transitional destination-level HTTPS enforcement. APPLICATION_GATEWAY remains a future adapter capability. Shared serialized contract schema stays 1; demo-agent remains a fixture.

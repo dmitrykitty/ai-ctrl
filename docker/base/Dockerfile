@@ -17,7 +17,7 @@ RUN groupadd --gid 501 dev && \
     mkdir -p /workspace /home/dev/.claude /etc/aictrl && \
     chown -R dev:dev /workspace /home/dev/.claude && chmod 700 /home/dev/.claude
 
-COPY init-firewall.sh install-proxy-ca.sh entrypoint.sh /usr/local/bin/
+COPY init-firewall.sh install-proxy-ca.sh entrypoint.sh prepare-claude-ui.py /usr/local/bin/
 COPY LICENSE.agent-sandbox /usr/local/share/licenses/agent-sandbox/LICENSE
 RUN chmod 755 /usr/local/bin/init-firewall.sh /usr/local/bin/install-proxy-ca.sh /usr/local/bin/entrypoint.sh
 

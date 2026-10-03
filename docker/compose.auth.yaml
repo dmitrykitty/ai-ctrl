@@ -3,7 +3,7 @@
 name: aictrl-auth
 services:
   auth-proxy:
-    image: aictrl-base:py3.12.15-t01
+    image: aictrl-base:py3.12.15-t02
     entrypoint: [python, /etc/aictrl/auth-proxy.py]
     user: "501:501"
     read_only: true
@@ -29,11 +29,11 @@ services:
       timeout: 3s
       retries: 10
   claude-login:
-    image: aictrl-claude:2.1.285-t01
+    image: aictrl-claude:2.1.285-t02
     command: [claude, auth, login, --claudeai]
     cap_drop: [ALL]
     # Available only to trusted bootstrap; setpriv drops every capability.
-    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN, FOWNER]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN, FOWNER, DAC_OVERRIDE]
     security_opt: [no-new-privileges:true]
     init: true
     pids_limit: 256

@@ -1,70 +1,78 @@
-# Skeleton adapted from agent-sandbox internal/embeddata/templates/compose/base.yml
-# and templates/claude/cli/agent.yml (MIT, Matt Olson 2026).
+# Topology adapted from agent-sandbox compose/base.yml (MIT, Matt Olson 2026).
+# The host supervisor renders per-session names, destinations, limits and IPs.
 name: aictrl
 services:
-  gateway:
-    profiles: [runtime]
-    image: aictrl-base:py3.12.15-t01
-    user: "501:501"
-    entrypoint: [python, -c, "raise SystemExit('Application gateway is not implemented yet — milestone T03')"]
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    read_only: true
-    networks:
-      agent-internal:
-        ipv4_address: 172.30.87.2
-      upstream: {}
   proxy:
     profiles: [runtime]
-    image: aictrl-base:py3.12.15-t01
-    user: "501:501"
-    entrypoint: [python, -c, "raise SystemExit('Runtime egress proxy is not implemented yet — milestone T02')"]
+    image: aictrl-proxy:mitm-t02
+    user: "1000:1000"
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     read_only: true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1
+    environment:
+      AICTRL_DESTINATIONS_FILE: /etc/aictrl/destinations.json
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=64m"]
+    volumes:
+      - type: bind
+        source: ${AICTRL_RUNTIME_DIR:-../.aictrl}/destinations.json
+        target: /etc/aictrl/destinations.json
+        read_only: true
+        bind: {create_host_path: false}
+      - proxy-private-ca:/home/mitmproxy/.mitmproxy
+      - proxy-public-ca:/ca-export
     networks:
-      agent-internal:
-        ipv4_address: 172.30.87.3
+      agent-internal: {ipv4_address: 172.30.87.2}
       upstream: {}
+    healthcheck:
+      test: [CMD, python, -c, "from pathlib import Path; assert Path('/tmp/aictrl-proxy-ready').exists(); assert Path('/ca-export/proxy-ca.pem').is_file()"]
+      interval: 1s
+      timeout: 3s
+      retries: 20
   agent:
     profiles: [runtime]
-    image: aictrl-claude:2.1.285-t01
+    image: aictrl-claude:2.1.285-t02
     command: [claude]
     cap_drop: [ALL]
-    # Runtime bootstrap intentionally refuses startup in T01.
-    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN, FOWNER]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN, FOWNER, DAC_OVERRIDE, KILL]
     security_opt: [no-new-privileges:true]
     init: true
+    stdin_open: true
+    tty: true
     cpus: 2
     mem_limit: 2g
     pids_limit: 256
     working_dir: /workspace
     environment:
       AICTRL_BOOTSTRAP_MODE: runtime
-      AICTRL_GATEWAY_IP: 172.30.87.2
-      AICTRL_PROXY_IP: 172.30.87.3
-    extra_hosts:
-      gateway: 172.30.87.2
-      proxy: 172.30.87.3
+      AICTRL_UID: ${AICTRL_UID:-1000}
+      AICTRL_GID: ${AICTRL_GID:-1000}
+      AICTRL_PROXY_IP: 172.30.87.2
+      HTTP_PROXY: http://proxy:8080
+      HTTPS_PROXY: http://proxy:8080
+      NO_PROXY: localhost,127.0.0.1
+    extra_hosts: {proxy: 172.30.87.2}
     volumes:
       - type: bind
         source: ${AICTRL_WORKSPACE:-../demo/project}
         target: /workspace
-        bind:
-          create_host_path: false
+        bind: {create_host_path: false}
       - claude-state:/home/dev/.claude
       - proxy-public-ca:/etc/aictrl:ro
     networks: [agent-internal]
+    depends_on:
+      proxy: {condition: service_healthy}
 networks:
   agent-internal:
     internal: true
     enable_ipv6: false
-    ipam:
-      config:
-        - subnet: 172.30.87.0/24
+    ipam: {config: [{subnet: 172.30.87.0/24}]}
   upstream: {}
 volumes:
   claude-state:
     external: true
     name: aictrl-claude-state
+  proxy-private-ca: {}
   proxy-public-ca: {}

@@ -11,14 +11,21 @@
   "installer_modification": "Replace mutable latest bootstrap lookup with the pinned TARGET; retain the official installer and checksum verification",
   "claude_sha256_amd64": "33dad1ec615a2e08cc78b494f05c110e49916de2c79d78ec8799ebf46b233d29",
   "claude_sha256_arm64": "24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d",
-  "base_local_ref": "aictrl-base:py3.12.15-t01",
-  "claude_local_ref": "aictrl-claude:2.1.285-t01",
-  "base_image_id": "sha256:6aa766403c933b40f83857e64ffac4ecd551a573bac5acc625623f5787247a20",
+  "base_local_ref": "aictrl-base:py3.12.15-t02",
+  "claude_local_ref": "aictrl-claude:2.1.285-t02",
+  "base_image_id": "sha256:7b229dcd23ba00496574245973a8ef32a23aec99211b0db249d0e84bfacb1147",
   "base_repo_digests": [
-    "aictrl-base@sha256:6aa766403c933b40f83857e64ffac4ecd551a573bac5acc625623f5787247a20"
+    "aictrl-base@sha256:7b229dcd23ba00496574245973a8ef32a23aec99211b0db249d0e84bfacb1147"
   ],
-  "claude_image_id": "sha256:3753162762467711f5f4cde51d56942cce1bf26cc62f5e638f9e3c86fac8103f",
+  "claude_image_id": "sha256:d9c2de14b6c7eb90356de84139d4af04b7d80d2380f5034393bd4da866d9d6dd",
   "claude_repo_digests": [
-    "aictrl-claude@sha256:3753162762467711f5f4cde51d56942cce1bf26cc62f5e638f9e3c86fac8103f"
+    "aictrl-claude@sha256:d9c2de14b6c7eb90356de84139d4af04b7d80d2380f5034393bd4da866d9d6dd"
+  ],
+  "mitmproxy_base_image": "mitmproxy/mitmproxy@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f",
+  "mitmproxy_version": "Mitmproxy: 12.2.3",
+  "proxy_local_ref": "aictrl-proxy:mitm-t02",
+  "proxy_image_id": "sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f",
+  "proxy_repo_digests": [
+    "aictrl-proxy@sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f"
   ]
 }

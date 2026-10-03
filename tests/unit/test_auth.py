@@ -24,9 +24,11 @@ def test_native_status_reports_only_boolean_and_preserves_isolation(monkeypatch,
     command = commands[1]
     assert command[command.index("--network") + 1] == "none"
     assert command[command.index("--cap-drop") + 1] == "ALL"
-    assert "501:501" in command
+    assert "0:0" in command
+    assert '--bounding-set=-all' in auth.STATUS_COMMAND
+    assert '--inh-caps=-all --ambient-caps=-all --no-new-privs' in auth.STATUS_COMMAND
     assert "type=volume,source=aictrl-claude-state,target=/home/dev/.claude,readonly" in command
-    assert command[-4:] == [auth.CLAUDE_IMAGE, "auth", "status", "--json"]
+    assert command[-3:] == [auth.CLAUDE_IMAGE, "-ec", auth.STATUS_COMMAND]
     assert not any("type=bind" in argument for argument in command)
 
 

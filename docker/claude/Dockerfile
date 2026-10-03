@@ -1,6 +1,6 @@
 # Adapted from agent-sandbox images/agents/claude/Dockerfile.
 # MIT, Copyright (c) 2026 Matt Olson; see ../LICENSE.agent-sandbox.
-ARG BASE_IMAGE=aictrl-base:py3.12.15-t01
+ARG BASE_IMAGE=aictrl-base:py3.12.15-t02
 FROM ${BASE_IMAGE}
 USER dev
 ARG CLAUDE_CODE_VERSION=2.1.285

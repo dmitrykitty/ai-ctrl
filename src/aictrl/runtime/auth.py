@@ -3,16 +3,24 @@
 import json
 import subprocess
 
-CLAUDE_IMAGE = "aictrl-claude:2.1.285-t01"
+CLAUDE_IMAGE = "aictrl-claude:2.1.285-t02"
 CLAUDE_STATE = "aictrl-claude-state"
 AUTH_CONTAINER = "aictrl-claude-auth"
+
+STATUS_COMMAND = (
+    'task_uid=$(stat -c %u /home/dev/.claude); task_gid=$(stat -c %g /home/dev/.claude); '
+    '[[ "$task_uid" != 0 && "$task_gid" != 0 ]] || exit 2; '
+    'exec setpriv --reuid="$task_uid" --regid="$task_gid" --clear-groups '
+    '--bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs '
+    'claude auth status --json'
+)
 
 
 class AuthenticationCheckError(RuntimeError):
     pass
 
 
-def claude_authenticated() -> bool:
+def claude_authenticated(image: str = CLAUDE_IMAGE) -> bool:
     try:
         active = subprocess.run(
             ["docker", "ps", "--filter", f"volume={CLAUDE_STATE}", "--format", "{{.ID}}"],
@@ -25,10 +33,12 @@ def claude_authenticated() -> bool:
         result = subprocess.run(
             ["docker", "run", "--rm", "--name", AUTH_CONTAINER,
              "--network", "none", "--cap-drop", "ALL",
-             "--security-opt", "no-new-privileges:true", "--user", "501:501",
+             "--cap-add", "SETUID", "--cap-add", "SETGID", "--cap-add", "SETPCAP",
+             "--security-opt", "no-new-privileges:true", "--user", "0:0",
+             "--env", "HOME=/home/dev",
              "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=64m",
              "--mount", f"type=volume,source={CLAUDE_STATE},target=/home/dev/.claude,readonly",
-             "--entrypoint", "claude", CLAUDE_IMAGE, "auth", "status", "--json"],
+             "--entrypoint", "/bin/bash", image, "-ec", STATUS_COMMAND],
             capture_output=True, text=True, check=False,
         )
     except OSError:

@@ -2,10 +2,10 @@
 set -euo pipefail
 task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$task_root"
-docker build --tag aictrl-base:py3.12.15-t01 docker/base
-docker build --tag aictrl-claude:2.1.285-t01 docker/claude
+docker build --tag aictrl-base:py3.12.15-t02 docker/base
+docker build --tag aictrl-claude:2.1.285-t02 docker/claude
 docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges:true \
-    --user 501:501 --entrypoint claude aictrl-claude:2.1.285-t01 --version
+    --user 501:501 --entrypoint claude aictrl-claude:2.1.285-t02 --version
 docker volume create aictrl-claude-state >/dev/null
 python3 - <<'PY'
 import json
