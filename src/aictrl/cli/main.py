@@ -11,6 +11,7 @@ from aictrl.runtime.supervisor import run_claude
 from aictrl.runtime.workspace import PROJECT_ROOT
 from aictrl.runtime.config import load_config
 from aictrl.reporting.store import EventStore, StoreFailure
+from aictrl.runtime.integration import verify_claude
 
 app = typer.Typer(help="AI Control Layer — isolated coding-agent supervisor.", no_args_is_help=True)
 
@@ -61,3 +62,22 @@ def events(session: Annotated[UUID, typer.Option(help="Managed session UUID.")])
     except (ValueError, StoreFailure) as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(2) from None
+
+
+@app.command()
+def verify(
+    agent: Annotated[str, typer.Argument(help="Real agent to qualify (claude).")],
+    workspace: Annotated[Path, typer.Argument(help="Workspace directory.")],
+) -> None:
+    """Prove real inference, policy denial and blocked bypass in one session."""
+    if agent != 'claude':
+        typer.echo('Integration proof supports claude only.', err=True)
+        raise typer.Exit(2)
+    try:
+        proof = verify_claude(workspace, PROJECT_ROOT)
+    except (AuthenticationCheckError, RuntimeFailure, StoreFailure, ValueError, OSError):
+        typer.echo('T04 integration unavailable. Check authentication, configuration, Docker and audit storage.', err=True)
+        raise typer.Exit(2) from None
+    for line in proof.lines():
+        typer.echo(line)
+    raise typer.Exit(0 if proof.passed else 1)
