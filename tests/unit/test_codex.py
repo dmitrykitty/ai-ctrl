@@ -42,6 +42,8 @@ def test_verified_provider_profile_uses_environment_identity_only():
     data = tomllib.loads(raw)
     provider = data['model_providers']['aictrl']
     assert data['model_provider'] == 'aictrl' and data['forced_login_method'] == 'chatgpt'
+    assert data['sandbox_mode'] == 'danger-full-access' and data['approval_policy'] == 'never'
+    assert data['web_search'] == 'disabled'
     assert provider['base_url'] == 'http://gateway:8000/codex'
     assert provider['wire_api'] == 'responses' and provider['requires_openai_auth']
     assert not provider['supports_websockets']

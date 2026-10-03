@@ -44,9 +44,9 @@
   "codex_bwrap_sha256_amd64": "f7c730d20d7d13db8e4b858f9a5735614616ae5426edd2edacb3b8e58186cd93",
   "codex_license_sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
   "codex_local_ref": "aictrl-codex:0.159.3-t05",
-  "codex_image_id": "sha256:9c3ed5324c57e7b0cf96845a5fceda07e7217e4acf24ac49b62d34d4e91af2e3",
+  "codex_image_id": "sha256:e6db7d5c88478966701b36dea1e56cf00108bc2c290cd7f752bcaf8c323c39fd",
   "codex_repo_digests": [
-    "aictrl-codex@sha256:9c3ed5324c57e7b0cf96845a5fceda07e7217e4acf24ac49b62d34d4e91af2e3"
+    "aictrl-codex@sha256:e6db7d5c88478966701b36dea1e56cf00108bc2c290cd7f752bcaf8c323c39fd"
   ],
   "codex_bwrap_license_sha256": {
     "copying": "b7993225104d90ddd8024fd838faf300bea5e83d91203eab98e29512acebd69c",

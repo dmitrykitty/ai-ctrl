@@ -3,6 +3,10 @@ model_provider = "aictrl"
 forced_login_method = "chatgpt"
 cli_auth_credentials_store = "file"
 log_dir = "/tmp/aictrl-codex-logs"
+# This image runs inside AICTRL's externally enforced Docker sandbox.
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
+web_search = "disabled"
 
 [model_providers.aictrl]
 name = "AICTRL"

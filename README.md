@@ -1,6 +1,6 @@
 # AI Control Layer
 
-T01–T05 are complete. Real Claude Code 2.1.285 and Codex CLI 0.159.3 use saved subscription authentication through native application gateways, strict admission policy and durable SQLite events. Both use the shared Docker isolation and separate provider state. Codex's basic Responses path is qualified; its optional local-file tool proof is blocked by nested sandbox namespace creation. See [verification](NOTES.md) and the approved [plan](plan.md).
+T01–T05 are complete. Real Claude Code 2.1.285 and Codex CLI 0.159.3 use saved subscription authentication through native application gateways, strict admission policy and durable SQLite events. Both use the shared Docker isolation and separate provider state. Codex's Responses path and real local read/write/tool-follow-up are qualified. See [verification](NOTES.md) and the approved [plan](plan.md).
 
 ## Prepare and authenticate
 
@@ -52,7 +52,9 @@ Codex selects the public `$CODEX_HOME/aictrl.config.toml` using `--profile aictr
 
 The gateway admits only POST `/codex/responses` and forwards to fixed `https://chatgpt.com/backend-api/codex/responses`. The user explicitly approved this native subscription backend after the T05-requested `https://api.openai.com/v1` returned 401. There is no fallback or caller-controlled upstream. Provider Authorization/account headers, original JSON/query and raw SSE pass through; internal identity is stripped. Both `api.openai.com` and `chatgpt.com` are excluded from generic proxy inference. Unsupported catalog/auxiliary routes stay denied; the pinned client can complete the smoke using its bundled model catalog.
 
-The optional `demo/project/demo_codex.txt` task did not complete: the native local tool cannot create its nested sandbox namespace under the retained Docker boundary. The official helper is installed, and Responses tool-call/follow-up transport passes deterministic qualification; successful real local tool execution is not claimed. Codex prompt mode suppresses native stderr because it includes full input; final answers, exit status and safe gateway events remain visible. T06 has not started.
+Codex's image profile sets `sandbox_mode="danger-full-access"`, `approval_policy="never"` and `web_search="disabled"`. This avoids creating a second sandbox inside the already isolated AICTRL container; Docker filesystem isolation, non-root IDs, capability drop, NNP, firewall, limits and gateway remain the enforcement boundary. The settings are packaged only in the container profile. This follows the [official container guidance](https://learn.chatgpt.com/docs/agent-approvals-security).
+
+The real task read `demo/project/demo_codex.txt`, created `codex-test.txt` with the same content and returned exactly `AICTRL_CODEX_TOOL_OK`, exit 0. Its two native Responses requests have paired durable ALLOW/completion events after cleanup. Focused probes confirmed absent host credentials/socket, unchanged non-root/capability boundary and blocked direct/proxy inference bypass. Web search is explicitly disabled. Codex prompt mode suppresses native stderr because it includes full input; final answers, exit status and safe gateway events remain visible. Local tool semantic authorization remains T06 work; T06 has not started.
 
 ## Repeatable Claude integration proof
 
@@ -123,6 +125,8 @@ make compose-config
 The T03 checkpoint and final offline suite each passed 127 tests. Focused actual Docker qualification passed 47 checks, including native messages/count_tokens, inference proxy denial, zero denied upstream/host hits, non-root/capability/resource boundaries, durable events after cleanup and gateway-unavailable startup refusal. It uses separate synthetic state and a test-only transport; the production upstream is fixed. One live subscription response was qualified separately. T04 adds 24 targeted orchestration tests; its final full offline suite passed 151 tests. Its one live proof reused unchanged images and security enforcement, so the T03 Docker matrix was not repeated. T02's prior signal/deadline/concurrency qualification remains recorded in `NOTES.md`; authentication helpers were unchanged.
 
 T05's one final offline suite passed 194 tests. Focused Codex Docker qualification passed 42 checks, including the actual pinned client/custom profile against a synthetic Responses backend, unchanged isolation, raw SSE/function-call/follow-up forwarding, both inference proxy denials, durable events and cleanup. Six actual independent-provider lease checks passed. One live Claude regression passed because the shared runtime/gateway changed. The unchanged Claude/proxy images and historical full boundary matrices were reused. Codex native authentication persistence and idempotent login were verified without reading credentials.
+
+The subsequent T05 profile cleanup passed 13 targeted adapter/profile tests and 20 checks in one real local-tool session. It rebuilt only the Codex image; full offline and historical Docker matrices were not repeated for this small configuration change. The read/create-file/follow-up task now passes under the unchanged external boundary.
 
 Defaults remain 2 CPUs, 2048 MiB RAM, 256 PIDs and 600 seconds including preparation. `--timeout` only shortens the deadline. Host SIGINT/SIGTERM return 130/143, deadline 124, and ordinary exit is propagated. Cleanup preserves workspace and provider state.
 

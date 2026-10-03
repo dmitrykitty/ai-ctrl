@@ -1,6 +1,36 @@
 # Implementation notes
 
-## T05 verified on 2026-10-03 — PASS
+## T05 cleanup verified on 2026-10-03 — PASS
+
+The user explicitly authorized disabling only Codex's inner sandbox inside AICTRL's existing Docker boundary. The packaged docker/codex/aictrl.config.toml now contains sandbox_mode="danger-full-access", approval_policy="never" and web_search="disabled". No host Codex configuration, Docker capability/seccomp/AppArmor/namespace setting, firewall, mount, state lease, gateway, policy, contract or dependency changed. Official [container guidance](https://learn.chatgpt.com/docs/agent-approvals-security) and [configuration fields](https://learn.chatgpt.com/docs/config-file/config-reference) were checked, along with the pinned 0.159.3 native --help. AICTRL's external isolation remains the enforcement boundary for the untrusted agent and its tools.
+
+Only the changed Codex image was rebuilt; prior binary/base layers were cached. Updated image aictrl-codex:0.159.3-t05 is sha256:e6db7d5c88478966701b36dea1e56cf00108bc2c290cd7f752bcaf8c323c39fd, recorded in docker/images.lock.json. Existing gateway, proxy, Claude and base images were reused. Native status/preflight used the preserved isolated subscription state; no authentication flow or credential file inspection was needed.
+
+Thirteen targeted adapter/profile tests passed in 0.21 seconds. A single managed production RuntimeSupervisor then ran the real pinned Codex with --strict-config --profile aictrl exec, using prompt input on stdin and privately captured native diagnostics. Input: “Use a local tool to read demo_codex.txt. Create codex-test.txt with exactly the same content. Then reply with exactly the file content and nothing else.” The output file started absent. Codex read the existing public fixture, created demo/project/codex-test.txt with AICTRL_CODEX_TOOL_OK, returned exactly AICTRL_CODEX_TOOL_OK and exited 0. The created file has host UID/GID 1000:1000. Successful local tool execution and the native model follow-up are now qualified.
+
+Session 67f80fec-ee2f-492e-9c9a-949c20873f64 has two actual Responses ALLOW/completion pairs plus durable BLOCKs after cleanup:
+
+| Action | Event ID | Request ID | Reason |
+|---|---|---|---|
+| ALLOW | b006322b-6150-4ab1-8de0-ec4aae274435 | c91ad9b5-72c6-4099-91b7-3fc0133a4011 | llm.policy.allowed |
+| AUDIT | 536f5738-903d-4d3d-ae9d-d6aa13c66942 | c91ad9b5-72c6-4099-91b7-3fc0133a4011 | llm.upstream_completed |
+| ALLOW | 7699ba1b-e7f5-4c4a-9da0-036c2725ebc1 | e56362c9-fe86-411d-92e8-1b2bc7bab2b2 | llm.policy.allowed |
+| AUDIT | 25d01820-25b0-4450-bd47-dece0387ab6e | e56362c9-fe86-411d-92e8-1b2bc7bab2b2 | llm.upstream_completed |
+| BLOCK | 8dbbe143-e994-4c75-9fbb-42e21f73e00b | bb19537a-7880-4045-a595-0d793d7c22b8 | llm.policy.blocked |
+
+All events identify the same trusted session and codex/codex, LLM OUTBOUND, RESPONSES, STRUCTURED, schema 1 and policy t03. The final BLOCK is the controlled valid-identity forbidden GET, HTTP 403. Unsupported auxiliary/catalog requests also remained blocked. Payloads/tool results/provider credentials/internal token were not persisted in the audit or printed by the probe.
+
+All 20 focused checks passed in this one session: real read/final answer, real created file, non-root matching UID/GID, five capability sets empty, NNP, absent host SSH/AWS/Kubernetes/host mount and Docker socket, effective full-access/never container profile, web search disabled, direct 1.1.1.1:443 denial, generic CONNECT denial for both api.openai.com and chatgpt.com, forbidden GET denial, paired native gateway follow-up, durable attribution/BLOCK, complete cleanup, provider state preserved, unchanged workspace ownership/mode and created file ownership. No session-labelled container/network/volume or host identity directory remained. Workspace files, provider state and SQLite survived.
+
+This was a small configuration cleanup: the previous 194-test final suite, 42-check Docker matrix, six lease checks and live Claude proof were not repeated. No T06 guards, semantic tool authorization, MCP or other later milestone work was started. T01–T05 remain COMPLETE. The historical nested-namespace limitation below is resolved by this explicitly authorized container profile change.
+
+The initial test/build submissions were not executed because automatic approval review hit its usage limit. After the user requested continuation, the same approval path was retried successfully; the check was not bypassed.
+
+## Initial T05 qualification record
+
+The following record describes T05 before this cleanup. Its image identity and optional nested-sandbox limitation are historical; the current image and real tool proof are recorded above.
+
+## Initial T05 verified on 2026-10-03 — PASS
 
 T01–T05 are COMPLETE. T05 uses the explicitly user-approved fixed native ChatGPT backend after the originally requested API origin rejected native subscription authentication. T06 has not started. Approximately 40 active minutes were used, including qualification and documentation, excluding the user-requested break. The initial segment was 17:52:39–18:03:44 UTC (~11 minutes); work resumed at 18:56:10 UTC.
 

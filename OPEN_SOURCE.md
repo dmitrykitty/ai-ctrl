@@ -56,4 +56,6 @@ Protocol behavior was checked against Anthropic's current [gateway configuration
 
 The public profile preparer, CodexAdapter, native status wrapper, shared-runtime selection, Responses handler, bounded terminal-frame observer and deterministic/live diagnostics are new project code. Existing FastAPI/HTTPX/Pydantic/PyYAML/SQLite dependencies and serialized contracts are reused unchanged. The auth proxy extends the existing exact-host design to auth.openai.com; no third-party OAuth implementation or native credential parser is added.
 
+The subsequent T05 cleanup changes only the project-owned public profile to use AICTRL's outer container boundary instead of Codex's nested sandbox, with approval never and web search disabled. Official binaries, source pins and license notices are unchanged; no new upstream code or dependency is introduced.
+
 Version, source URLs, SHA-256 pins, license checksums and final locally built image identities are recorded in `docker/images.lock.json`. The proxy, base and Claude images were reused without rebuilding. Official configuration references were checked at implementation time; saved subscription forwarding to the fixed native ChatGPT backend was explicitly approved and actually qualified, as recorded in NOTES.md.
