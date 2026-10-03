@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "upstream_commit": "c5b65e7cbd8f5b3bbf4e3ea40900c0014eedfa04",
+  "python": "3.12.15",
+  "uv": "0.12.22",
+  "base_image": "python:3.12.15-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3",
+  "apt_snapshot": "20261002T000000Z",
+  "claude_version": "2.1.285",
+  "installer_url": "https://claude.ai/install.sh",
+  "installer_sha256": "3a68d3406cf674e17bed1733a4dcf37805e2e47d87417700007d7e1aa766a944",
+  "installer_modification": "Replace mutable latest bootstrap lookup with the pinned TARGET; retain the official installer and checksum verification",
+  "claude_sha256_amd64": "33dad1ec615a2e08cc78b494f05c110e49916de2c79d78ec8799ebf46b233d29",
+  "claude_sha256_arm64": "24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d",
+  "base_local_ref": "aictrl-base:py3.12.15-t01",
+  "claude_local_ref": "aictrl-claude:2.1.285-t01",
+  "base_image_id": "sha256:4c80ba98ca3601fd4735576d107e363bb74264f73c93517b4d30c9eff3644537",
+  "base_repo_digests": [
+    "aictrl-base@sha256:4c80ba98ca3601fd4735576d107e363bb74264f73c93517b4d30c9eff3644537"
+  ],
+  "claude_image_id": "sha256:8502c46d31b77f9df008eec6ac2f701d90cc72df1327311a87d745ba1829de01",
+  "claude_repo_digests": [
+    "aictrl-claude@sha256:8502c46d31b77f9df008eec6ac2f701d90cc72df1327311a87d745ba1829de01"
+  ]
+}

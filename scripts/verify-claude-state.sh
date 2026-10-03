@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ -n "$(docker ps --filter volume=aictrl-claude-state --format '{{.ID}}')" ]]; then
+    echo 'Stop the active Claude state container before persistence verification' >&2
+    exit 1
+fi
+docker volume create aictrl-claude-state >/dev/null
+task_marker=".aictrl-probe-$(python3 -c 'import uuid; print(uuid.uuid4())')"
+task_args=(--rm --network none --cap-drop ALL --security-opt no-new-privileges:true
+    --user 501:501 --mount type=volume,source=aictrl-claude-state,target=/home/dev/.claude
+    --env "AICRTL_STATE_PROBE=$task_marker" --entrypoint /bin/bash aictrl-claude:2.1.285-t01)
+docker run "${task_args[@]}" -ec \
+    'test "$CLAUDE_CONFIG_DIR" = /home/dev/.claude; printf prepared > "$CLAUDE_CONFIG_DIR/$AICRTL_STATE_PROBE"'
+docker run "${task_args[@]}" -ec \
+    'test "$(cat "$CLAUDE_CONFIG_DIR/$AICRTL_STATE_PROBE")" = prepared; rm "$CLAUDE_CONFIG_DIR/$AICRTL_STATE_PROBE"; printf "Claude named state survived container restart; owner "; stat -c "%u:%g" "$CLAUDE_CONFIG_DIR"'

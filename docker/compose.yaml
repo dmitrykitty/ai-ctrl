@@ -1,0 +1,70 @@
+# Skeleton adapted from agent-sandbox internal/embeddata/templates/compose/base.yml
+# and templates/claude/cli/agent.yml (MIT, Matt Olson 2026).
+name: aictrl
+services:
+  gateway:
+    profiles: [runtime]
+    image: aictrl-base:py3.12.15-t01
+    user: "501:501"
+    entrypoint: [python, -c, "raise SystemExit('Application gateway is not implemented yet — milestone T03')"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    networks:
+      agent-internal:
+        ipv4_address: 172.30.87.2
+      upstream: {}
+  proxy:
+    profiles: [runtime]
+    image: aictrl-base:py3.12.15-t01
+    user: "501:501"
+    entrypoint: [python, -c, "raise SystemExit('Runtime egress proxy is not implemented yet — milestone T02')"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    networks:
+      agent-internal:
+        ipv4_address: 172.30.87.3
+      upstream: {}
+  agent:
+    profiles: [runtime]
+    image: aictrl-claude:2.1.285-t01
+    command: [claude]
+    cap_drop: [ALL]
+    # Runtime bootstrap intentionally refuses startup in T01.
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    init: true
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 256
+    working_dir: /workspace
+    environment:
+      AICRTL_BOOTSTRAP_MODE: runtime
+      AICRTL_GATEWAY_IP: 172.30.87.2
+      AICRTL_PROXY_IP: 172.30.87.3
+    extra_hosts:
+      gateway: 172.30.87.2
+      proxy: 172.30.87.3
+    volumes:
+      - type: bind
+        source: ${AICRTL_WORKSPACE:-../demo/project}
+        target: /workspace
+        bind:
+          create_host_path: false
+      - claude-state:/home/dev/.claude
+      - proxy-public-ca:/etc/aictrl:ro
+    networks: [agent-internal]
+networks:
+  agent-internal:
+    internal: true
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.87.0/24
+  upstream: {}
+volumes:
+  claude-state:
+    external: true
+    name: aictrl-claude-state
+  proxy-public-ca: {}
