@@ -40,15 +40,15 @@ services:
     pids_limit: 256
     working_dir: /workspace
     environment:
-      AICRTL_BOOTSTRAP_MODE: runtime
-      AICRTL_GATEWAY_IP: 172.30.87.2
-      AICRTL_PROXY_IP: 172.30.87.3
+      AICTRL_BOOTSTRAP_MODE: runtime
+      AICTRL_GATEWAY_IP: 172.30.87.2
+      AICTRL_PROXY_IP: 172.30.87.3
     extra_hosts:
       gateway: 172.30.87.2
       proxy: 172.30.87.3
     volumes:
       - type: bind
-        source: ${AICRTL_WORKSPACE:-../demo/project}
+        source: ${AICTRL_WORKSPACE:-../demo/project}
         target: /workspace
         bind:
           create_host_path: false

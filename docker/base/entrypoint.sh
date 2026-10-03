@@ -2,7 +2,7 @@
 # Adapted from agent-sandbox images/base/entrypoint.sh (MIT, Matt Olson 2026).
 set -euo pipefail
 [[ "$(id -u)" == 0 ]] || { echo 'Trusted root bootstrap is required' >&2; exit 1; }
-case "${AICRTL_BOOTSTRAP_MODE:-}" in
+case "${AICTRL_BOOTSTRAP_MODE:-}" in
     auth)
         # The bootstrap login path cannot be turned into an agent launch.
         [[ "$#" == 4 && "$1" == claude && "$2" == auth && "$3" == login && "$4" == --claudeai ]] || {

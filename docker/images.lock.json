@@ -13,12 +13,12 @@
   "claude_sha256_arm64": "24fac77749bed3d91365d6b6915aa4b824e14318ecb6bc17adbc192f01c9173d",
   "base_local_ref": "aictrl-base:py3.12.15-t01",
   "claude_local_ref": "aictrl-claude:2.1.285-t01",
-  "base_image_id": "sha256:4c80ba98ca3601fd4735576d107e363bb74264f73c93517b4d30c9eff3644537",
+  "base_image_id": "sha256:6aa766403c933b40f83857e64ffac4ecd551a573bac5acc625623f5787247a20",
   "base_repo_digests": [
-    "aictrl-base@sha256:4c80ba98ca3601fd4735576d107e363bb74264f73c93517b4d30c9eff3644537"
+    "aictrl-base@sha256:6aa766403c933b40f83857e64ffac4ecd551a573bac5acc625623f5787247a20"
   ],
-  "claude_image_id": "sha256:8502c46d31b77f9df008eec6ac2f701d90cc72df1327311a87d745ba1829de01",
+  "claude_image_id": "sha256:3753162762467711f5f4cde51d56942cce1bf26cc62f5e638f9e3c86fac8103f",
   "claude_repo_digests": [
-    "aictrl-claude@sha256:8502c46d31b77f9df008eec6ac2f701d90cc72df1327311a87d745ba1829de01"
+    "aictrl-claude@sha256:3753162762467711f5f4cde51d56942cce1bf26cc62f5e638f9e3c86fac8103f"
   ]
 }

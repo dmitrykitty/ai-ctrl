@@ -42,8 +42,8 @@ services:
     stdin_open: true
     tty: true
     environment:
-      AICRTL_BOOTSTRAP_MODE: auth
-      AICRTL_PROXY_IP: 172.30.88.2
+      AICTRL_BOOTSTRAP_MODE: auth
+      AICTRL_PROXY_IP: 172.30.88.2
       CLAUDE_CONFIG_DIR: /home/dev/.claude
       HTTP_PROXY: http://auth-proxy:8080
       HTTPS_PROXY: http://auth-proxy:8080

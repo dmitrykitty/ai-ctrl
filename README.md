@@ -45,6 +45,8 @@ Claude state is `aictrl-claude-state` mounted at `/home/dev/.claude`. Provider a
 
 The runtime Compose profile is a skeleton whose services refuse startup until implemented. The small CONNECT transport is restricted to T01 native login; future runtime egress uses the planned enforcing proxy. Native login deliberately uses end-to-end TLS with destination-only coverage. No protected agent operation is launched through this bootstrap transport.
 
+Project environment variables use the `AICTRL_` prefix: `AICTRL_BOOTSTRAP_MODE`, `AICTRL_PROXY_IP`, `AICTRL_GATEWAY_IP`, and `AICTRL_WORKSPACE` configure the prepared Docker assets; `AICTRL_GATEWAY_URL` configures the demo adapter. `AICTRL_STATE_PROBE` is used only by the state verification helper. Rebuild the images with `make claude-image` after changes to the bootstrap scripts.
+
 The reused upstream uses UID/GID 501. T02 must handle chosen-workspace write permissions while retaining a non-root agent and dropped capabilities. CPU/memory/PID limits are prepared; the login helper also enforces a ten-minute timeout. The host supervisor's runtime wall-time enforcement belongs to T02.
 
 See [reuse decisions](REUSE_DECISIONS.md), [attribution](OPEN_SOURCE.md), [architecture](ARCHITECTURE.md), [task status](TASKS.md), and [verified results](NOTES.md). `plan.md` remains unchanged.

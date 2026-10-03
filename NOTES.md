@@ -35,8 +35,8 @@ Decisions:
 - Six direct runtime dependencies plus pytest are locked with hashes in `uv.lock`. The build backend is hatchling 1.27.0.
 - Official base: Python 3.12.15 slim-bookworm, digest `sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3`; signed apt snapshot `20261002T000000Z`.
 - Actual CLI: Claude Code 2.1.285, installed through the checksum-pinned official installer with its mutable bootstrap lookup pinned to the requested target. The executable is promoted to a root-owned path; bootstrap PATH contains no agent-writable directories.
-- Observed local base identity: `sha256:4c80ba98ca3601fd4735576d107e363bb74264f73c93517b4d30c9eff3644537`.
-- Observed local Claude identity: `sha256:8502c46d31b77f9df008eec6ac2f701d90cc72df1327311a87d745ba1829de01`. Local Docker RepoDigests are recorded in `docker/images.lock.json`; these images have not been published to a remote registry.
+- Observed local base identity: `sha256:6aa766403c933b40f83857e64ffac4ecd551a573bac5acc625623f5787247a20`.
+- Observed local Claude identity: `sha256:3753162762467711f5f4cde51d56942cce1bf26cc62f5e638f9e3c86fac8103f`. Local Docker RepoDigests are recorded in `docker/images.lock.json`; these images have not been published to a remote registry.
 - Provider state is only `aictrl-claude-state` → `/home/dev/.claude`; accepted provider-authentication exception is documented. No host agent, SSH, AWS, or Kubernetes directory was mounted.
 - Auth-only CONNECT transport uses end-to-end TLS and explicit destination-only coverage; native login command restriction and actual network enforcement prevent an unenforced agent launch. Runtime services and `aictrl run` remain explicit nonfunctional stubs until their milestones.
 - Every copied/adapted upstream file and its MIT notice is recorded in `OPEN_SOURCE.md` and `REUSE_DECISIONS.md`.
@@ -44,6 +44,12 @@ Decisions:
 Known blockers:
 - The headless container cannot complete the user's browser sign-in/consent and code-entry step. Native login was started in the verified state volume and reached the supported authorization flow. Complete `make claude-login` in an interactive host terminal using the user's account. The image and state mount are verified; authentication is not faked. This is the permitted T01 login exception and blocks a real subscription response in T03 until resolved.
 - There are no remaining Python, dependency, image-build, Compose, or Docker-daemon blockers.
+
+Follow-up verification (2026-10-03):
+- Standardized all project environment variables on the `AICTRL_` prefix, including the demo gateway URL and state probe. Updated bootstrap/firewall consumers, Compose producers, verification helpers, and README together.
+- Rebuilt both Docker images and reverified actual Claude Code 2.1.285. Updated the image identities above and in `docker/images.lock.json`.
+- All 33 offline tests, shell syntax checks, both Compose configurations, the `AICTRL_WORKSPACE` mount override, and the entrypoint's restricted auth/runtime responses passed.
+- A native login container was active, so the standard boundary helper correctly refused its shared configuration. Ran the existing ten boundary probes on a separate internal test network and the updated state helper with a temporary named volume; all passed. Only proxy addresses and test resource names were substituted for isolation. Test containers, networks, and volume were removed; the active login and provider state were preserved.
 
 Next-milestone requirements:
 - T02 must implement the host supervisor/lifecycle, actual enforcing runtime proxy, selected workspace permissions for UID 501, public CA export, and wall-clock enforcement. The prepared runtime entrypoint deliberately refuses to start an agent today.

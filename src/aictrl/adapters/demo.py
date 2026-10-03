@@ -7,7 +7,7 @@ class DemoAgentAdapter:
     entry_command = ("python", "/opt/aictrl/demo/agent/main.py")
     persistent_state_volume = None
     state_mount = None
-    environment = {"AICRTL_GATEWAY_URL": "http://gateway:8000"}
+    environment = {"AICTRL_GATEWAY_URL": "http://gateway:8000"}
     required_provider_endpoints = ()
 
     def __init__(self, image_ref: str) -> None:
