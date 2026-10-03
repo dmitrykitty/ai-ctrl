@@ -1,6 +1,6 @@
 # AI Control Layer
 
-T01 foundation, T02 isolation, T03 first native gateway path and T04 repeatable integration proof are complete. Real Claude Code 2.1.285 uses its existing subscription through a native Anthropic gateway, strict admission policy and durable SQLite events. The agent retains the verified Docker isolation. See [verification](NOTES.md) and the approved [plan](plan.md).
+T01–T05 are complete. Real Claude Code 2.1.285 and Codex CLI 0.159.3 use saved subscription authentication through native application gateways, strict admission policy and durable SQLite events. Both use the shared Docker isolation and separate provider state. Codex's basic Responses path is qualified; its optional local-file tool proof is blocked by nested sandbox namespace creation. See [verification](NOTES.md) and the approved [plan](plan.md).
 
 ## Prepare and authenticate
 
@@ -32,7 +32,29 @@ The native workspace-trust dialog remains enabled. After authentication prefligh
 
 The agent mounts exactly the selected workspace, dedicated provider state and read-only public proxy CA. Policy, audit, host credentials, the Docker socket and CA private material remain outside the agent.
 
-## Repeatable integration proof
+## Run Codex
+
+```bash
+make codex-image
+make codex-version
+make codex-auth-status
+make codex-login
+aictrl run codex demo/project
+aictrl run codex demo/project --prompt 'Reply with exactly: AICTRL_CODEX_OK' --timeout 90
+aictrl events --session <session-uuid>
+```
+
+The live prompt command returned exactly `AICTRL_CODEX_OK`, exit 0, with a durable Responses ALLOW/completion pair after cleanup. The image downloads checksum-pinned official release binaries, including the required code-mode host and bubblewrap helper, on the existing trusted base. Qualification is Linux/amd64.
+
+Native `codex login --device-auth` uses only `aictrl-codex-state` at `/home/dev/.codex` through a separate auth.openai.com-only login proxy. Complete the native device flow in your browser. Status runs in a fresh container with network disabled and the same volume read-only; it emits only a safe authentication result. Repeated login exits 0 when authenticated. Authentication survives runtime cleanup and container recreation. Host `~/.codex` and browser/SSH credentials are never mounted; no OpenAI Platform API key is used. Concurrent Codex/authentication use is refused; Claude has a separate volume and lease.
+
+Codex selects the public `$CODEX_HOME/aictrl.config.toml` using `--profile aictrl`. Its provider uses `http://gateway:8000/codex`, native Responses HTTP/SSE, saved OpenAI authentication and `env_http_headers` for the ephemeral `X-AICtrl-Session` header. WebSockets and automatic transport retries are disabled. Project-level `.codex/config.toml` is not used for routing. These fields follow the checked [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+
+The gateway admits only POST `/codex/responses` and forwards to fixed `https://chatgpt.com/backend-api/codex/responses`. The user explicitly approved this native subscription backend after the T05-requested `https://api.openai.com/v1` returned 401. There is no fallback or caller-controlled upstream. Provider Authorization/account headers, original JSON/query and raw SSE pass through; internal identity is stripped. Both `api.openai.com` and `chatgpt.com` are excluded from generic proxy inference. Unsupported catalog/auxiliary routes stay denied; the pinned client can complete the smoke using its bundled model catalog.
+
+The optional `demo/project/demo_codex.txt` task did not complete: the native local tool cannot create its nested sandbox namespace under the retained Docker boundary. The official helper is installed, and Responses tool-call/follow-up transport passes deterministic qualification; successful real local tool execution is not claimed. Codex prompt mode suppresses native stderr because it includes full input; final answers, exit status and safe gateway events remain visible. T06 has not started.
+
+## Repeatable Claude integration proof
 
 ```bash
 aictrl verify claude demo/project
@@ -74,7 +96,7 @@ The private gateway accepts POST `/anthropic/v1/messages` and `/anthropic/v1/mes
 
 `config/policy.yaml` is strict, versioned and defaults to BLOCK. Only an enabled declared agent with an explicitly allowed native operation is admitted. Missing/wrong/expired identity, unsupported routes, denied/disabled policy and invalid JSON cause no upstream action. Policy errors and admission-store failures fail closed. HTTPX uses one client per gateway, explicit limits/timeouts, no environment proxy inheritance, no POST retries and no redirect following.
 
-The generic proxy excludes `api.anthropic.com` in gateway mode, including duplicate authentication declarations or test pins for that inference host. Declared authentication hosts remain available. It cannot provide an alternate inference tunnel. `EGRESS_ONLY` remains available by changing the trusted routing setting; that mode forwards native provider traffic through destination-only opaque CONNECT and has no application admission/audit.
+The generic proxy excludes each adapter's inference hosts in gateway mode, including duplicate authentication declarations or test pins. These are `api.anthropic.com` for Claude and `api.openai.com`/`chatgpt.com` for Codex. Declared authentication hosts remain available. `EGRESS_ONLY` remains an explicit trusted Claude alternative with destination-only opaque CONNECT and no application admission/audit; the Codex launcher requires `APPLICATION_GATEWAY`.
 
 Both modes retain default-deny agent networking. Only designated proxy/gateway TCP sockets and required TCP loopback/replies are allowed. Direct internet, host/sibling access, DNS, UDP/QUIC and IPv6 remain blocked. Gateway health is required before the workload starts; failure never selects another route.
 
@@ -93,14 +115,18 @@ aictrl verify claude demo/project
 make test-fast
 make test
 make verify-gateway-boundary
+make verify-codex-boundary
+.venv/bin/python scripts/verify-codex-boundary.py --leases-only
 make compose-config
 ```
 
 The T03 checkpoint and final offline suite each passed 127 tests. Focused actual Docker qualification passed 47 checks, including native messages/count_tokens, inference proxy denial, zero denied upstream/host hits, non-root/capability/resource boundaries, durable events after cleanup and gateway-unavailable startup refusal. It uses separate synthetic state and a test-only transport; the production upstream is fixed. One live subscription response was qualified separately. T04 adds 24 targeted orchestration tests; its final full offline suite passed 151 tests. Its one live proof reused unchanged images and security enforcement, so the T03 Docker matrix was not repeated. T02's prior signal/deadline/concurrency qualification remains recorded in `NOTES.md`; authentication helpers were unchanged.
 
+T05's one final offline suite passed 194 tests. Focused Codex Docker qualification passed 42 checks, including the actual pinned client/custom profile against a synthetic Responses backend, unchanged isolation, raw SSE/function-call/follow-up forwarding, both inference proxy denials, durable events and cleanup. Six actual independent-provider lease checks passed. One live Claude regression passed because the shared runtime/gateway changed. The unchanged Claude/proxy images and historical full boundary matrices were reused. Codex native authentication persistence and idempotent login were verified without reading credentials.
+
 Defaults remain 2 CPUs, 2048 MiB RAM, 256 PIDs and 600 seconds including preparation. `--timeout` only shortens the deadline. Host SIGINT/SIGTERM return 130/143, deadline 124, and ordinary exit is propagated. Cleanup preserves workspace and provider state.
 
-Gateway admission buffers a bounded request body (16 MiB maximum); response streams are not buffered in full. Completion records transport completion, without interpreting SSE content or calculating model usage. Gateway overhead was not separately measured. Direct-provider auxiliary features may be denied by the inference-host restriction. Semantic/output guards, MCP authorization, budgets, dashboard and additional agents remain later milestones. T04 is complete; T05 is next and has not started.
+Gateway admission buffers a bounded request body (16 MiB maximum); response streams are not buffered in full. Claude completion records transport completion. Codex additionally recognizes complete native terminal SSE framing with a bounded 128-byte line prefix, so the client's close after response.completed still records completion and incomplete/error streams record failure. Payload bytes are relayed unchanged; usage and semantic output are not inspected. Gateway overhead was not separately measured. Auxiliary provider routes can be denied. Semantic/output guards, MCP authorization, budgets and dashboard remain later milestones. T05 is complete; T06 awaits its instruction.
 
 Project-owned environment variables use `AICTRL_`. Bootstrap uses `AICTRL_BOOTSTRAP_MODE`, `AICTRL_PROXY_IP`, `AICTRL_GATEWAY_IP`, `AICTRL_ROUTING_MODE`, `AICTRL_UID` and `AICTRL_GID`; raw Compose also accepts `AICTRL_WORKSPACE` and `AICTRL_RUNTIME_DIR`. Use the normal launcher for validated per-session configuration. Run targeted tests during implementation; documentation edits do not require another test run.
 

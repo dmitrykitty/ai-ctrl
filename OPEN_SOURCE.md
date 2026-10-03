@@ -42,3 +42,18 @@ The gateway, policy and reporting modules, session identity handling, image scri
 The MIT attribution above continues to cover adapted `docker/base/entrypoint.sh`, `docker/base/init-firewall.sh` and the Compose topology. T03 adds exact gateway readiness and host-rendered service configuration while retaining default deny, complete agent capability drop and provider-state isolation. `docker/base/Dockerfile.runtime` adds only those changed bootstrap files to the existing native Claude image, retaining inherited upstream MIT notices and vendor terms. The proxy image and authentication implementation are unchanged.
 
 Protocol behavior was checked against Anthropic's current [gateway configuration](https://code.claude.com/docs/en/llm-gateway) and [native gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol). These are documentation references; their gateway implementation was not copied. Live subscription qualification and actual resulting image identities are recorded in NOTES.md and docker/images.lock.json.
+
+## T05 Codex image and shared runtime
+
+`docker/codex/Dockerfile` is new project packaging on the existing digest-qualified agent-sandbox-derived base. It uses the same official release-binary installation approach inspected in upstream `images/agents/codex/Dockerfile`; no host executable is copied. The inherited agent-sandbox MIT notice remains in the image. Bootstrap and Compose changes below adapt the already attributed files, preserving their original license.
+
+| Source | Local asset | Modification and attribution |
+|---|---|---|
+| [OpenAI Codex rust-v0.159.3 release](https://github.com/openai/codex/releases/tag/rust-v0.159.3) | `/usr/local/bin/codex`, `/usr/local/bin/codex-code-mode-host` in Codex image | Official Linux/amd64 musl binaries; verify release-published SHA-256, install root-owned 0755, pin same version |
+| [Codex LICENSE at rust-v0.159.3](https://github.com/openai/codex/blob/rust-v0.159.3/LICENSE) | `docker/codex/LICENSE.openai-codex` | Verbatim Apache-2.0 notice embedded at `/usr/local/share/licenses/openai-codex/LICENSE`; applies to the Codex CLI and code-mode host |
+| Official Codex release bubblewrap helper; [vendored source](https://github.com/openai/codex/tree/rust-v0.159.3/codex-rs/vendor/bubblewrap) | `/usr/local/bin/bwrap`, `docker/codex/COPYING.bubblewrap`, `docker/codex/LICENSE.bubblewrap` | Verify pinned release digest; retain upstream COPYING (GNU Library GPL version 2) and LICENSE symlink target text in `/usr/local/share/licenses/bubblewrap/` |
+| Previously attributed agent-sandbox bootstrap/topology | `docker/base/entrypoint.sh`, `docker/compose.codex-auth.yaml`, host-rendered Codex runtime | Select only the exact dedicated Codex state path and restricted native device-auth command; retain MIT attribution, default deny and complete agent capability drop |
+
+The public profile preparer, CodexAdapter, native status wrapper, shared-runtime selection, Responses handler, bounded terminal-frame observer and deterministic/live diagnostics are new project code. Existing FastAPI/HTTPX/Pydantic/PyYAML/SQLite dependencies and serialized contracts are reused unchanged. The auth proxy extends the existing exact-host design to auth.openai.com; no third-party OAuth implementation or native credential parser is added.
+
+Version, source URLs, SHA-256 pins, license checksums and final locally built image identities are recorded in `docker/images.lock.json`. The proxy, base and Claude images were reused without rebuilding. Official configuration references were checked at implementation time; saved subscription forwarding to the fixed native ChatGPT backend was explicitly approved and actually qualified, as recorded in NOTES.md.

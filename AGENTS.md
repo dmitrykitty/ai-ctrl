@@ -1,10 +1,10 @@
 # AI Control Layer
 
-Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T04 are complete. T03 native subscription forwarding and T04 repeatable integration proof are verified. T05 Codex integration is authorized within a 45–60 minute timebox. Paused by user after approximately 11 active minutes; resume from the T05 checkpoint in NOTES.md after the user returns. Stop after T05; do not start T06.
+Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T05 are COMPLETE. T05 passed with real Codex subscription Responses forwarding to the explicitly user-approved fixed ChatGPT backend. Its optional local-file tool proof was blocked by Codex's nested sandbox namespace requirement; do not relax Docker capabilities, firewall or credential isolation to hide this limitation. Stop after T05; do not start T06 without its instruction.
 
 ## Goal and architecture
 
-Run actual coding agents in isolated Docker containers, with application-aware LLM/MCP/API gateways and an enforcing egress proxy. Use a Python 3.12 modular monolith, SQLite, validated YAML policy, and a small server-rendered dashboard. Claude is the first real agent; Codex is a later integration/fallback. Reuse `mattolson/agent-sandbox` at `c5b65e7cbd8f5b3bbf4e3ea40900c0014eedfa04` and retain MIT attribution.
+Run actual coding agents in isolated Docker containers, with application-aware LLM/MCP/API gateways and an enforcing egress proxy. Use a Python 3.12 modular monolith, SQLite, validated YAML policy, and a small server-rendered dashboard. Claude and Codex use one shared runtime with separate native provider paths and state. MCP, guards, governance and dashboard remain future work. Reuse `mattolson/agent-sandbox` at `c5b65e7cbd8f5b3bbf4e3ea40900c0014eedfa04` and retain MIT attribution.
 
 ## Workflow and boundaries
 
@@ -15,6 +15,8 @@ Use typed Python, explicit errors, small modules, and pinned dependencies. Keep 
 ## Commands and checks
 
 Verified commands and environmental failures are recorded in `NOTES.md`. Use `make bootstrap`, `./scripts/uv.sh sync --frozen`, `.venv/bin/aictrl --help`, `make doctor`, `make test`, `make claude-image`, `make claude-auth-status`, `make claude-login`, `make verify-claude-state`, and `make verify-auth-boundary`. Native status reports authenticated. T02 actual runtime isolation, workspace writes, limits, signal/deadline cleanup, interactive Claude and a live subscription response have passed. Use `make runtime-image`, `make gateway-image`, `make test-fast` and `make verify-gateway-boundary` for T03. Native Claude returned AICTRL_GATEWAY_OK; the final offline suite passed 127 tests and focused Docker qualification passed 47 checks. `aictrl events --session <uuid>` reads safe audit data. `aictrl verify claude demo/project` proves a real reply, forbidden application request, direct bypass denial, audit attribution and cleanup in one managed session. T04 passed once live, with 24 targeted tests and 151 final offline tests. Verification reuses unchanged production images/topology; gateway decisions are durable events, while kernel bypass denial is a probe result. `make verify-runtime-boundary` explicitly selects EGRESS_ONLY; authentication-only probes do not qualify the application gateway.
+
+T05 commands: `make codex-image`, `make codex-version`, `make codex-auth-status`, `make codex-login`, `aictrl run codex demo/project --prompt 'Reply with exactly: AICTRL_CODEX_OK'`, `make verify-codex-boundary`, and `.venv/bin/python scripts/verify-codex-boundary.py --leases-only`. Codex 0.159.3 is pinned; native device authentication uses only aictrl-codex-state and exact auth.openai.com. The public profile is selected by --profile aictrl; no project-level provider routing or API key. The fixed Responses upstream is https://chatgpt.com/backend-api/codex, approved after the original API origin returned 401. T05 final offline suite: 194 passed; focused Docker: 42 passed; provider leases: 6 passed; live Codex exact response and one credible shared-path Claude regression passed. Do not repeat these checks for documentation-only work.
 
 ## Security invariants
 
