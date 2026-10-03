@@ -1,0 +1,25 @@
+# Codex 0.159.3: --profile aictrl reads $CODEX_HOME/aictrl.config.toml.
+model_provider = "aictrl"
+forced_login_method = "chatgpt"
+cli_auth_credentials_store = "file"
+log_dir = "/tmp/aictrl-codex-logs"
+
+[model_providers.aictrl]
+name = "AICTRL"
+base_url = "http://gateway:8000/codex"
+wire_api = "responses"
+requires_openai_auth = true
+supports_websockets = false
+request_max_retries = 0
+stream_max_retries = 0
+
+[model_providers.aictrl.env_http_headers]
+X-AICtrl-Session = "AICTRL_SESSION_TOKEN"
+
+[history]
+persistence = "none"
+
+[otel]
+log_user_prompt = false
+exporter = "none"
+metrics_exporter = "none"

@@ -1,0 +1,95 @@
+# Dedicated native ChatGPT login; no host credentials or workspace.
+name: aictrl-codex-auth
+services:
+  auth-proxy:
+    image: aictrl-base:py3.12.15-t02
+    entrypoint:
+    - python
+    - /etc/aictrl/auth-proxy.py
+    user: 501:501
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    volumes:
+    - type: bind
+      source: ./auth-proxy.py
+      target: /etc/aictrl/auth-proxy.py
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+      auth-internal:
+        ipv4_address: 172.30.89.2
+      auth-upstream: {}
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz',
+        timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    environment:
+      AICTRL_AUTH_PROVIDER: codex
+  codex-login:
+    image: aictrl-codex:0.159.3-t05
+    command:
+    - codex
+    - --no-daemon
+    - login
+    - --device-auth
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_ADMIN
+    - NET_RAW
+    - SETUID
+    - SETGID
+    - SETPCAP
+    - CHOWN
+    - FOWNER
+    - DAC_OVERRIDE
+    security_opt:
+    - no-new-privileges:true
+    init: true
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2
+    stdin_open: true
+    tty: true
+    environment:
+      AICTRL_BOOTSTRAP_MODE: auth
+      AICTRL_ADAPTER: codex
+      AICTRL_PROXY_IP: 172.30.89.2
+      CODEX_HOME: /home/dev/.codex
+      HTTP_PROXY: http://auth-proxy:8080
+      HTTPS_PROXY: http://auth-proxy:8080
+      NO_PROXY: localhost,127.0.0.1
+    extra_hosts:
+      auth-proxy: 172.30.89.2
+    volumes:
+    - codex-state:/home/dev/.codex
+    networks:
+    - auth-internal
+    depends_on:
+      auth-proxy:
+        condition: service_healthy
+networks:
+  auth-internal:
+    internal: true
+    enable_ipv6: false
+    ipam:
+      config:
+      - subnet: 172.30.89.0/24
+  auth-upstream: {}
+volumes:
+  codex-state:
+    external: true
+    name: aictrl-codex-state

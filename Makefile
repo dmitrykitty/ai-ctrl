@@ -1,4 +1,17 @@
 .PHONY: bootstrap prepare test test-fast doctor claude-image runtime-image gateway-image proxy-image claude-version claude-auth-status claude-login compose-config verify-auth-boundary verify-claude-state verify-runtime-boundary verify-gateway-boundary
+.PHONY: codex-image codex-version codex-auth-status codex-login
+
+codex-image:
+	bash ./scripts/codex-image.sh
+
+codex-version:
+	docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges:true --user 501:501 --entrypoint codex aictrl-codex:0.159.3-t05 --version
+
+codex-auth-status:
+	bash ./scripts/codex-auth-status.sh
+
+codex-login:
+	bash ./scripts/codex-login.sh
 
 bootstrap:
 	./scripts/bootstrap.sh

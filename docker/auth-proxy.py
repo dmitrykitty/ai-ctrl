@@ -9,11 +9,17 @@ import asyncio
 import ipaddress
 import re
 import socket
+import os
 
 ALLOWED_HOSTS = frozenset({
     "claude.ai", "claude.com", "platform.claude.com", "console.anthropic.com",
     "api.anthropic.com",  # Native authentication connectivity/account checks.
 })
+if os.environ.get('AICTRL_AUTH_PROVIDER', 'claude') == 'codex':
+    # Native device login and OAuth renewal use this exact HTTPS origin.
+    ALLOWED_HOSTS = frozenset({'auth.openai.com'})
+elif os.environ.get('AICTRL_AUTH_PROVIDER', 'claude') != 'claude':
+    raise SystemExit('Unsupported authentication provider')
 ACTIVE_CONNECTIONS = asyncio.Semaphore(32)
 
 
