@@ -34,3 +34,11 @@ The same approved revision and MIT copyright apply below. The verbatim license i
 | `images/proxy/addons/enforcer.py` | `docker/proxy/enforcer.py` | Retain HTTP/CONNECT/server-connect admission pattern and streaming responses; omit credential injection, reload, full policy and content logging | Minimal enforcing runtime egress without later-milestone scope |
 
 `docker/proxy/destinations.py`, `docker/base/prepare-claude-ui.py`, host supervisor/rendering/validation and runtime probes are new project code. mitmproxy 12.2.3 is distributed under its original MIT license and installed dependency notices in the official image; its base digest and actual image identity are in `docker/images.lock.json`. Claude vendor software retains its own terms.
+
+## T03 native gateway and readiness
+
+The gateway, policy and reporting modules, session identity handling, image scripts and synthetic qualification are new project code. They reuse the already-locked FastAPI, uvicorn, Pydantic, HTTPX and PyYAML distributions and Python's standard-library SQLite; no additional dependency or protocol framework is introduced. Original installed notices remain in the digest-pinned Python gateway image.
+
+The MIT attribution above continues to cover adapted `docker/base/entrypoint.sh`, `docker/base/init-firewall.sh` and the Compose topology. T03 adds exact gateway readiness and host-rendered service configuration while retaining default deny, complete agent capability drop and provider-state isolation. `docker/base/Dockerfile.runtime` adds only those changed bootstrap files to the existing native Claude image, retaining inherited upstream MIT notices and vendor terms. The proxy image and authentication implementation are unchanged.
+
+Protocol behavior was checked against Anthropic's current [gateway configuration](https://code.claude.com/docs/en/llm-gateway) and [native gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol). These are documentation references; their gateway implementation was not copied. Live subscription qualification and actual resulting image identities are recorded in NOTES.md and docker/images.lock.json.

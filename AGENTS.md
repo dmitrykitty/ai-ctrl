@@ -1,6 +1,6 @@
 # AI Control Layer
 
-Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01 cleanup and T1/T02 launcher/isolation are complete. The user requested closing T02 and moving onward. T03 is next; preserve each milestone boundary and record its result before advancing.
+Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01, T02 and T03 are complete. T03 native subscription forwarding, policy admission and durable events are verified. Stop after T03; do not start T04.
 
 ## Goal and architecture
 
@@ -14,7 +14,7 @@ Use typed Python, explicit errors, small modules, and pinned dependencies. Keep 
 
 ## Commands and checks
 
-Verified commands and environmental failures are recorded in `NOTES.md`. Use `make bootstrap`, `./scripts/uv.sh sync --frozen`, `.venv/bin/aictrl --help`, `make doctor`, `make test`, `make claude-image`, `make claude-auth-status`, `make claude-login`, `make verify-claude-state`, and `make verify-auth-boundary`. Native status reports authenticated. T02 actual runtime isolation, workspace writes, limits, signal/deadline cleanup, interactive Claude and a live subscription response have passed. Use `make test-fast` and `make verify-runtime-boundary` for the current runtime; authentication-only probes do not qualify it.
+Verified commands and environmental failures are recorded in `NOTES.md`. Use `make bootstrap`, `./scripts/uv.sh sync --frozen`, `.venv/bin/aictrl --help`, `make doctor`, `make test`, `make claude-image`, `make claude-auth-status`, `make claude-login`, `make verify-claude-state`, and `make verify-auth-boundary`. Native status reports authenticated. T02 actual runtime isolation, workspace writes, limits, signal/deadline cleanup, interactive Claude and a live subscription response have passed. Use `make runtime-image`, `make gateway-image`, `make test-fast` and `make verify-gateway-boundary` for T03. Native Claude returned AICTRL_GATEWAY_OK; the final offline suite passed 127 tests and focused Docker qualification passed 47 checks. `aictrl events --session <uuid>` reads safe audit data. `make verify-runtime-boundary` explicitly selects EGRESS_ONLY; authentication-only probes do not qualify the application gateway.
 
 ## Security invariants
 
@@ -24,4 +24,24 @@ Do not silently replace real enforcement with mocked behavior.
 
 Mount only the selected workspace, public proxy CA, and dedicated provider state. Never mount host agent configuration, SSH, AWS, Kubernetes, enterprise credentials, policy storage, audit storage, or the CA private key into agents. Agent networking must fail closed, block direct internet/host/sibling/DNS/IPv6/UDP bypasses, and drop setup privileges before running the agent. Only the proxy and gateway may access upstream networks. Provider authentication may persist in its dedicated named volume; enterprise credentials may not. Preserve that volume at ordinary shutdown and allow only one active container per provider state volume.
 
-Never log credentials, provider tokens, or full prompts. Record inspection coverage explicitly; never silently downgrade TLS inspection. Update `NOTES.md`, `TASKS.md`, reuse records, and working commands after each milestone. Record unresolved blockers honestly; do not claim application inspection for the T02 opaque CONNECT path. T03 starts from the approved native gateway scope.
+Never log credentials, provider tokens, or full prompts. Record inspection coverage explicitly; never silently downgrade TLS inspection. Update `NOTES.md`, `TASKS.md`, reuse records, and working commands after each milestone. Record unresolved blockers honestly; do not claim application inspection for the T02 opaque CONNECT path. T03 records STRUCTURED native Anthropic admission; generic CONNECT remains DESTINATION_ONLY. Keep inference hosts excluded from the generic proxy in APPLICATION_GATEWAY, commit admission before upstream, preserve raw SSE, and never persist payloads/auth headers/internal identity tokens. Audit lives at .aictrl/audit/events.sqlite3 outside agent mounts and ordinary cleanup.
+
+## FAST ITERATION / TEST DISCIPLINE
+
+Do not run the full test suite after every code change.
+
+During implementation:
+- run the smallest relevant unit/integration tests for the files being changed;
+- rerun only previously failing tests while debugging;
+- run Docker/runtime verification only when runtime/network/container code changed;
+- do not rebuild unchanged images;
+- do not repeat expensive live-provider tests unless the relevant gateway/runtime path changed.
+
+Run the full offline suite only:
+1. at a meaningful milestone checkpoint,
+2. after broad/shared-contract changes when necessary,
+3. once before declaring the milestone complete.
+
+Documentation-only changes do not require rerunning tests.
+
+Prefer targeted feedback loops measured in seconds over full-suite feedback loops measured in minutes.

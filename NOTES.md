@@ -1,6 +1,49 @@
 # Implementation notes
 
-T1 / repository T02 STATUS: PASS. T01 remains COMPLETE; T02 launcher and isolation COMPLETE. Next milestone: T03, native application gateway. The user requested closing T02 and moving onward; this record covers only the completed T02 scope.
+T03 STATUS: PASS. T01, T02 and T03 are COMPLETE. Stop here; T04 has not started. The active configuration is APPLICATION_GATEWAY with native Anthropic forwarding, minimal strict admission and durable safe events. `plan.md` and shared serialized contracts remain unchanged (schema 1).
+
+## T03 verified on 2026-10-03
+
+- One live qualification: `.venv/bin/aictrl run claude demo/project --prompt 'Reply with exactly: AICTRL_GATEWAY_OK' --timeout 90` returned exactly `AICTRL_GATEWAY_OK`, exit 0, with existing saved subscription authentication. No new login flow, gateway API credential or custom OAuth implementation was introduced.
+- Real session `562bd3ba-6017-4072-bf6c-fb5100286961`, request `3747fdce-e39d-440e-9412-aed99ec25eb9`: SQLite contains ALLOW / `llm.policy.allowed` then AUDIT / `llm.upstream_completed`, both LLM, OUTBOUND, ANTHROPIC_MESSAGES, STRUCTURED, claude, policy t03. Admission was at 17:21:08.882295 UTC; completion at 17:21:10.746017 UTC. The interval includes the provider and streaming; gateway overhead was not separately measured.
+- `aictrl events --session 562bd3ba-6017-4072-bf6c-fb5100286961` displayed the two safe attributable events after cleanup. No session-labelled container, network or CA volume remained after live/Docker qualification.
+- Targeted gateway/policy/store/runtime tests passed. One `make test-fast` checkpoint: 127 passed in 0.87 seconds. One final `make test`: 127 passed in 0.81 seconds. No test rerun followed documentation edits.
+- `make verify-gateway-boundary` passed 47 actual Docker checks: native messages and count_tokens with exact queries, raw SSE/ping order, invalid session/unsupported route blocking, generic inference CONNECT and HTTP denial, no direct/DNS/UDP/IPv6/host/sibling bypass, host UID/GID, empty capability sets, NNP, resource limits, public-only CA, absent host credentials/socket, workspace writes and provider state preservation.
+- The same focused qualification confirmed gateway non-root/readonly/capability drop, absent workspace/provider-state/CA mounts, two durable ALLOW/completion pairs plus two BLOCK events after cleanup, no prompt/provider credential in SQLite, exactly four allowed synthetic upstream hits and zero denied/host hits. A stopped gateway prevented the workload marker from being created; host deadline returned 124 and cleanup preserved prior audit/state.
+- Unit tests prove admission is visible from a fresh SQLite connection before upstream is called; missing/wrong/expired/duplicate identity fails closed; disabled/denied/default/invalid policy blocks; actual SQLite write errors prevent upstream. Raw request body/queries and future Anthropic/version/beta/auth headers are preserved, internal/hop headers are removed, statuses/errors/rate-limit headers survive, POST is not retried, and the first SSE chunk arrives before upstream EOF. Stream and final-audit failures have safe handling.
+- count_tokens is qualified in native routing/header/body/query unit tests and real Docker with a synthetic native backend. The live provider qualification exercised messages; no separate paid count_tokens request was made.
+
+## T03 implementation and security decisions
+
+Current official [Claude gateway configuration](https://code.claude.com/docs/en/llm-gateway) and [native protocol](https://code.claude.com/docs/en/llm-gateway-protocol) were verified before forwarding code. Saved subscription auth remains native when a base URL is supplied without gateway credentials. Version/beta/auth and relevant client headers are forwarded; `X-AICtrl-Session` is control-plane identity only and never reaches the provider.
+
+Runtime generates `secrets.token_urlsafe(48)` per session and stores it in existing excluded SecretStr identity. Minimal trusted session data is mounted read-only from a mode-0400 ephemeral file; equality is constant-time and expiry/duplicate headers are checked. Claude receives the internal header through its adapter. The gateway receives no workspace, provider state, Docker socket or private CA. Its production mounts are readonly session, readonly policy and persistent audit. It runs at host UID/GID with ALL capabilities dropped, NNP, readonly root, bounded tmpfs and internal/upstream networks, without host ports.
+
+Strict `config/policy.yaml` defaults to BLOCK and permits only declared enabled native Anthropic operations. Gateway supports POST messages/count_tokens with fixed HTTPS Anthropic origin, unchanged body/query bytes and incremental raw response streaming. Request bodies are limited to 16 MiB and validated only in memory. HTTPX is lifecycle-owned, environment-independent, explicitly timed/limited, without POST retries or redirect following. Semantic/output filtering and model usage extraction are deferred.
+
+`.aictrl/audit/events.sqlite3` is host-persistent, outside workspace/provider state/session cleanup and ignored by Git. Mode 0700 directory / 0600 database, WAL, synchronous FULL, 14-column events plus schema-1 SecurityEvent JSON and session index. Admission commits before upstream; audit/policy failure prevents an upstream action. BLOCK is durable; completion/failure is correlated AUDIT. Completion persistence failure logs safe IDs only because delivered bytes cannot be recalled. Prompts, system/messages content, tool arguments, provider credentials, auth headers and internal tokens are absent from audit/control logs. Native accepted provider state/history is preserved.
+
+In APPLICATION_GATEWAY, inference-host entries are removed from the generic proxy across all purposes, including duplicate auth declarations; inference-host test pins are refused. Only declared authentication/auxiliary destinations remain. EGRESS_ONLY is still supported by explicit trusted config and retains destination-only opaque CONNECT. The existing authentication helper and boundary were unchanged, so authentication-only Docker probes were not repeated. Focused T03 qualification reuses the affected runtime checks once in gateway mode; the full T02 lifecycle matrix was not rerun.
+
+Gateway service creation, Compose health wait and exact bootstrap health readiness are fail-closed. Existing native privilege drop, workspace validation, state reservation, signal/deadline behavior and cleanup remain intact. Test-only synthetic transport injection lives under tests/fixtures and is absent from production configuration; the production upstream cannot be overridden by callers.
+
+## T03 iteration and commands
+
+The permanent FAST ITERATION / TEST DISCIPLINE section in AGENTS.md requires the smallest relevant tests, only failed-test reruns while debugging, Docker qualification for boundary changes, no unchanged image rebuild, one meaningful fast checkpoint, one final offline suite and no retest for docs. During development an HTTPX automatic Connection header was corrected before forwarding; only failed tests were retried. A test sibling initially kept the fixture network alive; putting it under Compose ownership fixed fixture cleanup, and the failed focused probe was retried. No production security relaxation was needed.
+
+`make runtime-image`, `make gateway-image`, `make prepare`, `make doctor`, `make test-fast`, `make test`, `make verify-gateway-boundary`, `.venv/bin/aictrl run claude demo/project`, and `.venv/bin/aictrl events --session <uuid>` are current commands. `make verify-runtime-boundary` explicitly selects EGRESS_ONLY for its separate historical lifecycle qualification. Authentication helpers continue to use the existing T02 image; normal runtime uses the T03 bootstrap overlay.
+
+Gateway uses the existing lock; no dependency was added. A temporary Docker build context contains only code/public requirements. The unchanged proxy and installed native Claude binary were reused. Final local image identities are gateway `sha256:0dc4b19fb7f058786d8c98ba2ac07a31f99f37311a0f86cdfc8a9e6f38b5c58e`, Claude runtime `sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf`; full pins/notices remain in docker/images.lock.json and OPEN_SOURCE.md. Images were built locally, not published remotely.
+
+## Remaining scope
+
+No T03 blocker remains. Qualification is Linux/amd64 with a non-root host user. Response completion denotes transport completion; SSE semantic errors pass through unchanged. Gateway overhead and provider usage were not measured. Direct-provider auxiliary features can be denied by the inference-host restriction. Guards, MCP authorization, budgets/reload, dashboard and other agent adapters remain later work.
+
+T04 starting point: build the required real-agent allowed/denied/direct-bypass integration proof on this existing native gateway/policy/store and supervisor; reuse the focused deterministic fixtures and safe per-session events. Do not start T04 without its next instruction.
+
+## Archived T02 record
+
+Historical T1 / repository T02 record: PASS, completed before T03. The future-scope statements below describe that checkpoint.
 
 ## Verified on 2026-10-03
 
