@@ -33,7 +33,7 @@ services:
       retries: 20
   agent:
     profiles: [runtime]
-    image: aictrl-claude:2.1.285-t02
+    image: aictrl-claude:2.1.285-t03
     command: [claude]
     cap_drop: [ALL]
     cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP, CHOWN, FOWNER, DAC_OVERRIDE, KILL]

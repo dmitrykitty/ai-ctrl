@@ -1,10 +1,10 @@
-.PHONY: bootstrap prepare test test-fast doctor claude-image proxy-image claude-version claude-auth-status claude-login compose-config verify-auth-boundary verify-claude-state verify-runtime-boundary
+.PHONY: bootstrap prepare test test-fast doctor claude-image runtime-image gateway-image proxy-image claude-version claude-auth-status claude-login compose-config verify-auth-boundary verify-claude-state verify-runtime-boundary verify-gateway-boundary
 
 bootstrap:
 	./scripts/bootstrap.sh
 
 # Local semantic models and dashboard assets come in T09.
-prepare: bootstrap claude-image proxy-image
+prepare: bootstrap runtime-image proxy-image gateway-image
 
 test:
 	./scripts/uv.sh run --frozen pytest
@@ -20,6 +20,12 @@ claude-image:
 
 proxy-image:
 	bash ./scripts/proxy-image.sh
+
+runtime-image:
+	bash ./scripts/runtime-image.sh
+
+gateway-image:
+	bash ./scripts/gateway-image.sh
 
 claude-version:
 	docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges:true --user 501:501 --entrypoint claude aictrl-claude:2.1.285-t02 --version
@@ -42,3 +48,6 @@ verify-claude-state:
 
 verify-runtime-boundary:
 	./scripts/uv.sh run --frozen python scripts/verify-runtime-boundary.py
+
+verify-gateway-boundary:
+	./scripts/uv.sh run --frozen python scripts/verify-gateway-boundary.py

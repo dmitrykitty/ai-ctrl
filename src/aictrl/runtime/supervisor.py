@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import signal
 import subprocess
 import sys
@@ -10,8 +11,9 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from pydantic import SecretStr
 
-from aictrl.adapters.base import AgentConfig, RoutingMode
+from aictrl.adapters.base import AgentConfig, EndpointPurpose, RoutingMode
 from aictrl.adapters.claude import ClaudeAdapter
 from aictrl.contracts import AgentSession, SessionState
 from aictrl.runtime.auth import AUTH_CONTAINER, CLAUDE_STATE, AuthenticationCheckError, claude_authenticated
@@ -19,6 +21,7 @@ from aictrl.runtime.compose import render_compose
 from aictrl.runtime.config import ProjectConfig, load_config
 from aictrl.runtime.docker import RuntimeDeadline, RuntimeFailure, docker, free_subnet
 from aictrl.runtime.workspace import PROJECT_ROOT, validate_workspace
+from aictrl.policy.loader import load_policy
 
 
 @dataclass
@@ -42,6 +45,11 @@ class RuntimeSupervisor:
         identity = AgentSession(agent_id=agent.adapter, adapter=agent.adapter, user_id=f'uid-{self.uid}',
                                 profile_id='local', workspace=str(self.workspace), protocol='ANTHROPIC_MESSAGES',
                                 billing_mode='SUBSCRIPTION', started_at=now)
+        self.gateway_mode = settings.runtime.routing_mode == RoutingMode.APPLICATION_GATEWAY
+        if self.gateway_mode:
+            identity.session_token = SecretStr(secrets.token_urlsafe(48))
+            rendered = ClaudeAdapter(agent.image_ref, RoutingMode.APPLICATION_GATEWAY).render_config(identity)
+            self.agent = agent.model_copy(update={'environment': dict(agent.environment) | rendered.environment})
         self.identifier = identity.session_id.hex
         self.session = ManagedSession(identity, 'aictrl-' + self.identifier + '-agent', now + timedelta(seconds=settings.limits.wall_time_seconds))
         self._deadline = time.monotonic() + settings.limits.wall_time_seconds
@@ -83,6 +91,15 @@ class RuntimeSupervisor:
         self._docker(['version', '--format', '{{.Server.Version}}'])
         self._docker(['image', 'inspect', self.agent.image_ref, '--format', '{{.Id}}'])
         self._docker(['image', 'inspect', self.settings.runtime.proxy_image, '--format', '{{.Id}}'])
+        if self.gateway_mode:
+            self._docker(['image', 'inspect', self.settings.gateway.image, '--format', '{{.Id}}'])
+            load_policy(self.project / 'config/policy.yaml')
+            raw_audit = self.project / self.settings.gateway.audit_directory
+            audit = raw_audit.resolve()
+            if raw_audit.is_symlink() or audit != self.project.resolve() / self.settings.gateway.audit_directory or self.workspace == audit or self.workspace in audit.parents:
+                raise RuntimeFailure('Audit storage must stay in the protected control directory.')
+            audit.mkdir(parents=True, exist_ok=True, mode=0o700)
+            audit.chmod(0o700)
         # Reserve the same engine-level name used by authentication operations.
         # This stopped container holds no mounts and prevents concurrent state use.
         lock_name = AUTH_CONTAINER if volume == CLAUDE_STATE else 'aictrl-' + self.identifier + '-state-lock'
@@ -95,17 +112,31 @@ class RuntimeSupervisor:
         subnet = free_subnet(self._docker)
         self.proxy_ip = str(subnet[2])
         self.internal_network = 'aictrl-' + self.identifier + '_agent-internal'
-        records = [{'host': endpoint.host, 'port': endpoint.port} for endpoint in self.agent.required_provider_endpoints]
+        inference_hosts = {endpoint.host for endpoint in self.agent.required_provider_endpoints if endpoint.purpose == EndpointPurpose.INFERENCE}
+        endpoints = [endpoint for endpoint in self.agent.required_provider_endpoints
+                     if not self.gateway_mode or endpoint.host not in inference_hosts]
+        if self.gateway_mode and any(endpoint.host in inference_hosts for endpoint in self.settings.runtime.test_destinations):
+            raise RuntimeFailure('Inference destinations cannot be generic proxy test destinations in gateway mode.')
+        records = [{'host': endpoint.host, 'port': endpoint.port} for endpoint in endpoints]
         records += [endpoint.model_dump(mode='json', exclude_none=True) for endpoint in self.settings.runtime.test_destinations]
         destination_file = Path(self.directory.name) / 'destinations.json'
         destination_file.write_text(json.dumps(records))
         destination_file.chmod(0o444)
+        if self.gateway_mode:
+            identity = self.session.identity
+            record = {name: str(getattr(identity, name)) for name in ('session_id', 'agent_id', 'adapter', 'user_id', 'profile_id')}
+            record['expires_at'] = self.session.deadline.isoformat()
+            record['session_token'] = identity.session_token.get_secret_value()
+            session_file = Path(self.directory.name) / 'session.json'
+            session_file.write_text(json.dumps(record))
+            session_file.chmod(0o400)
         topology = render_compose(self.project, Path(self.directory.name), self.workspace, self.settings, self.agent,
                                   self.identifier, str(subnet), self.proxy_ip, self.uid, self.gid, self.interactive,
                                   self.test_upstream_network)
         self.manifest.write_text(json.dumps(topology))
         self._prepared = True
-        self._docker([*self.compose, 'up', '--detach', '--wait', '--wait-timeout', str(max(1, int(min(self.remaining(), 30)))), 'proxy'], timeout=35)
+        infrastructure = ['proxy', 'gateway'] if self.gateway_mode else ['proxy']
+        self._docker([*self.compose, 'up', '--detach', '--wait', '--wait-timeout', str(max(1, int(min(self.remaining(), 30)))), *infrastructure], timeout=35)
 
     def _owned(self, identifier: str) -> bool:
         result = docker(['inspect', '--format', '{{index .Config.Labels "io.aictrl.session"}}', identifier], timeout=3, check=False)
@@ -243,8 +274,6 @@ def run_claude(workspace: Path, project: Path = PROJECT_ROOT, *, prompt: str | N
                timeout: int | None = None) -> int:
     selected = validate_workspace(workspace, project)
     settings = load_config(project)
-    if settings.runtime.routing_mode != RoutingMode.EGRESS_ONLY:
-        raise RuntimeFailure('The application gateway is not configured; use EGRESS_ONLY.')
     if timeout is not None:
         if not 1 <= timeout <= settings.limits.wall_time_seconds:
             raise ValueError('Timeout must be positive and no larger than the configured wall-clock limit.')
@@ -257,6 +286,7 @@ def run_claude(workspace: Path, project: Path = PROJECT_ROOT, *, prompt: str | N
     agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(identity)
     runtime = RuntimeSupervisor(selected, settings, agent, project, interactive=prompt is None and sys.stdin.isatty() and sys.stdout.isatty())
     command = ('claude', '--print', '--output-format', 'text') if prompt is not None else agent.entry_command
-    print(f'AICTRL session {runtime.identifier}: EGRESS_ONLY, HTTPS destination enforcement, UID/GID {runtime.uid}:{runtime.gid}', flush=True)
+    coverage = 'structured Anthropic admission' if runtime.gateway_mode else 'HTTPS destination enforcement'
+    print(f'AICTRL session {runtime.identifier}: {settings.runtime.routing_mode}, {coverage}, UID/GID {runtime.uid}:{runtime.gid}', flush=True)
     result, _ = runtime.run(command, input_text=prompt)
     return result

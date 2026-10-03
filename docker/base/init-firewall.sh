@@ -41,12 +41,30 @@ iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 ip6tables -A OUTPUT -j REJECT --reject-with icmp6-adm-prohibited
 
 # A live proxy socket is a prerequisite; do not launch if enforcement is absent.
+proxy_ready=0
 for attempt in {1..30}; do
     if timeout 1 bash -c 'exec 3<>/dev/tcp/"$AICTRL_PROXY_IP"/8080' 2>/dev/null; then
-        echo 'Restricted firewall initialized'
-        exit 0
+        proxy_ready=1
+        break
     fi
     sleep 1
 done
-echo 'Required proxy is unreachable; refusing agent startup' >&2
-exit 1
+[[ "$proxy_ready" == 1 ]] || { echo 'Required proxy is unreachable; refusing agent startup' >&2; exit 1; }
+if [[ "$AICTRL_BOOTSTRAP_MODE" == runtime && "${AICTRL_ROUTING_MODE:-EGRESS_ONLY}" == APPLICATION_GATEWAY ]]; then
+    python - <<'PY'
+import json, os, time, urllib.request
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+url = 'http://' + os.environ['AICTRL_GATEWAY_IP'] + ':8000/health'
+for _ in range(30):
+    try:
+        with opener.open(url, timeout=1) as response:
+            if response.status == 200 and json.load(response).get('status') == 'ready':
+                break
+    except (OSError, ValueError):
+        pass
+    time.sleep(1)
+else:
+    raise SystemExit('Required gateway is unavailable; refusing agent startup')
+PY
+fi
+echo 'Restricted firewall initialized'

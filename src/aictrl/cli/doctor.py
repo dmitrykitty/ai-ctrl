@@ -79,4 +79,6 @@ def inspect_environment(project: Path) -> list[Check]:
                 optional=True,
             )
         )
+        if configuration.runtime.routing_mode == 'APPLICATION_GATEWAY':
+            checks.append(docker_check('Native gateway image', ['image', 'inspect', configuration.gateway.image, '--format', '{{.Id}}'], optional=True))
     return checks

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 import typer
 
@@ -8,6 +9,8 @@ from aictrl.runtime.auth import AuthenticationCheckError
 from aictrl.runtime.docker import RuntimeFailure
 from aictrl.runtime.supervisor import run_claude
 from aictrl.runtime.workspace import PROJECT_ROOT
+from aictrl.runtime.config import load_config
+from aictrl.reporting.store import EventStore, StoreFailure
 
 app = typer.Typer(help="AI Control Layer — isolated coding-agent supervisor.", no_args_is_help=True)
 
@@ -34,7 +37,7 @@ def run(
 ) -> None:
     """Launch real Claude with enforced egress and host-owned cleanup."""
     if agent != 'claude':
-        typer.echo('Unsupported agent. T02 supports claude; demo-agent scenarios remain a later fixture.', err=True)
+        typer.echo('Unsupported agent. T03 supports claude; demo-agent scenarios remain a later fixture.', err=True)
         raise typer.Exit(2)
     try:
         result = run_claude(workspace, PROJECT_ROOT, prompt=prompt, timeout=timeout)
@@ -42,3 +45,19 @@ def run(
         typer.echo(str(error), err=True)
         raise typer.Exit(2) from None
     raise typer.Exit(result)
+
+
+@app.command()
+def events(session: Annotated[UUID, typer.Option(help="Managed session UUID.")]) -> None:
+    """Show safe durable events for one session."""
+    try:
+        settings = load_config(PROJECT_ROOT)
+        path = PROJECT_ROOT / settings.gateway.audit_directory / 'events.sqlite3'
+        if not path.is_file():
+            typer.echo('No audit events stored yet.')
+            return
+        for event in EventStore(path).events(session):
+            typer.echo(event.model_dump_json())
+    except (ValueError, StoreFailure) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(2) from None

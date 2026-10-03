@@ -27,5 +27,15 @@
   "proxy_image_id": "sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f",
   "proxy_repo_digests": [
     "aictrl-proxy@sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f"
+  ],
+  "claude_runtime_local_ref": "aictrl-claude:2.1.285-t03",
+  "claude_runtime_image_id": "sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf",
+  "claude_runtime_repo_digests": [
+    "aictrl-claude@sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf"
+  ],
+  "gateway_local_ref": "aictrl-gateway:t03",
+  "gateway_image_id": "sha256:0dc4b19fb7f058786d8c98ba2ac07a31f99f37311a0f86cdfc8a9e6f38b5c58e",
+  "gateway_repo_digests": [
+    "aictrl-gateway@sha256:0dc4b19fb7f058786d8c98ba2ac07a31f99f37311a0f86cdfc8a9e6f38b5c58e"
   ]
 }

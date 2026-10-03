@@ -1,0 +1,5 @@
+# Reuse the installed, pinned native Claude binary. Only bootstrap files change.
+FROM aictrl-claude:2.1.285-t02
+USER root
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 init-firewall.sh /usr/local/bin/init-firewall.sh

@@ -80,6 +80,7 @@ def test_test_destination_cannot_pin_host_metadata_or_loopback(ip):
 
 def test_rendered_topology_separates_state_ca_network_and_resource_limits(tmp_path):
     settings = load_config(PROJECT_ROOT)
+    settings.runtime.routing_mode = RoutingMode.EGRESS_ONLY
     agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(session(token=None))
     topology = render_compose(PROJECT_ROOT, tmp_path, tmp_path / 'workspace', settings, agent,
                               'synthetic-session', '172.30.10.0/24', '172.30.10.2', 1000, 1001, False)

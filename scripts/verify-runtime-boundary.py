@@ -33,6 +33,7 @@ def clean_session(identifier):
 
 def settings_and_agent(volume, target_ip, seconds=90):
     settings = load_config(PROJECT_ROOT)
+    settings.runtime.routing_mode = RoutingMode.EGRESS_ONLY
     settings.runtime.test_destinations = (TestDestination(host='allowed.test', port=8081, connect_ip=target_ip),)
     settings.limits.wall_time_seconds = seconds
     agent = AgentConfig(adapter='claude', image_ref=settings.claude.image, entry_command=('claude',),

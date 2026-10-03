@@ -24,6 +24,11 @@ for name in ('AICTRL_UID', 'AICTRL_GID'):
         raise SystemExit('Runtime UID/GID must be positive numeric host identities')
 PY
         [[ -f /etc/aictrl/proxy-ca.pem ]] || { echo 'Required public proxy CA is absent' >&2; exit 1; }
+        case "${AICTRL_ROUTING_MODE:-EGRESS_ONLY}" in
+            EGRESS_ONLY) ;;
+            APPLICATION_GATEWAY) [[ -n "${AICTRL_GATEWAY_IP:-}" ]] || { echo 'Required gateway address is absent' >&2; exit 1; } ;;
+            *) echo 'Invalid routing mode' >&2; exit 1 ;;
+        esac
         ;;
     *) echo 'Explicit restricted bootstrap mode required' >&2; exit 1 ;;
 esac

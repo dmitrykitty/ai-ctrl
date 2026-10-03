@@ -54,12 +54,18 @@ class RuntimeEgress(StrictConfig):
     test_destinations: tuple[TestDestination, ...] = ()
 
 
+class GatewayRuntime(StrictConfig):
+    image: str = 'aictrl-gateway:t03'
+    audit_directory: Literal['.aictrl/audit'] = '.aictrl/audit'
+
+
 class ProjectConfig(StrictConfig):
     schema_version: Literal[1]
-    milestone: Literal["T01", "T02"]
+    milestone: Literal["T01", "T02", "T03"]
     claude: ClaudeRuntime
     limits: RuntimeLimits
     runtime: RuntimeEgress = Field(default_factory=RuntimeEgress)
+    gateway: GatewayRuntime = Field(default_factory=GatewayRuntime)
 
 
 def load_config(project: Path) -> ProjectConfig:
