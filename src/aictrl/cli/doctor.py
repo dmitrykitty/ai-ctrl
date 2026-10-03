@@ -72,4 +72,11 @@ def inspect_environment(project: Path) -> list[Check]:
                 optional=True,
             )
         )
+        checks.append(
+            docker_check(
+                "Runtime proxy image",
+                ["image", "inspect", configuration.runtime.proxy_image, "--format", "{{.Id}}"],
+                optional=True,
+            )
+        )
     return checks

@@ -12,6 +12,11 @@ class EndpointPurpose(StrEnum):
     AUXILIARY = "AUXILIARY"
 
 
+class RoutingMode(StrEnum):
+    EGRESS_ONLY = "EGRESS_ONLY"
+    APPLICATION_GATEWAY = "APPLICATION_GATEWAY"
+
+
 class ProviderEndpoint(Contract):
     host: str
     port: int = Field(default=443, ge=1, le=65535)

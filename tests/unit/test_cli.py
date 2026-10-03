@@ -19,12 +19,12 @@ def fake_docker(monkeypatch, *, daemon_ok=True, image_ok=True):
 
 def test_help_and_run_do_not_start_containers(monkeypatch):
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("T01 run must not invoke Docker")
+            raise AssertionError("Invalid workspaces must not invoke Docker")
     monkeypatch.setattr("subprocess.run", fail_if_called)
     assert runner.invoke(app, ["--help"]).exit_code == 0
     result = runner.invoke(app, ["run", "claude", "."])
     assert result.exit_code == 2
-    assert "runtime not implemented yet" in result.output
+    assert "AICTRL control files" in result.output
 
 
 def test_doctor_image_warning_is_not_required_failure(monkeypatch):

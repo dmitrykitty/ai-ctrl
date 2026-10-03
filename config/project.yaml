@@ -1,7 +1,7 @@
 schema_version: 1
-milestone: T01
+milestone: T02
 claude:
-  image: aictrl-claude:2.1.285-t01
+  image: aictrl-claude:2.1.285-t02
   state_volume: aictrl-claude-state
   state_mount: /home/dev/.claude
   auth_mode: subscription
@@ -10,3 +10,7 @@ limits:
   memory_mb: 2048
   pids: 256
   wall_time_seconds: 600
+runtime:
+  proxy_image: aictrl-proxy:mitm-t02
+  routing_mode: EGRESS_ONLY
+  test_destinations: []

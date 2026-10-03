@@ -1,4 +1,4 @@
-from aictrl.adapters.base import AgentConfig, EndpointPurpose, ProviderEndpoint
+from aictrl.adapters.base import AgentConfig, EndpointPurpose, ProviderEndpoint, RoutingMode
 from aictrl.contracts import AgentSession
 
 
@@ -27,18 +27,23 @@ class ClaudeAdapter:
         ProviderEndpoint(host="console.anthropic.com", purpose=EndpointPurpose.AUTHENTICATION),
     )
 
-    def __init__(self, image_ref: str) -> None:
+    def __init__(self, image_ref: str, routing_mode: RoutingMode = RoutingMode.APPLICATION_GATEWAY) -> None:
         self.image_ref = image_ref
+        self.routing_mode = RoutingMode(routing_mode)
 
     def render_config(self, session: AgentSession) -> AgentConfig:
         if session.adapter != self.name:
             raise ValueError("session belongs to a different adapter")
-        if session.session_token is None:
+        if self.routing_mode == RoutingMode.APPLICATION_GATEWAY and session.session_token is None:
             raise ValueError("supervisor must supply an internal session token")
         environment = dict(self.environment)
-        environment["ANTHROPIC_CUSTOM_HEADERS"] = (
-            "X-AICtrl-Session: " + session.session_token.get_secret_value()
-        )
+        if self.routing_mode == RoutingMode.EGRESS_ONLY:
+            environment.pop("ANTHROPIC_BASE_URL")
+            environment["NO_PROXY"] = "localhost,127.0.0.1"
+        else:
+            environment["ANTHROPIC_CUSTOM_HEADERS"] = (
+                "X-AICtrl-Session: " + session.session_token.get_secret_value()
+            )
         return AgentConfig(
             adapter=self.name,
             image_ref=self.image_ref,
