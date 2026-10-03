@@ -16,7 +16,9 @@ class SyntheticTransport(httpx.AsyncBaseTransport):
         self.transport = httpx.AsyncHTTPTransport(retries=0)
 
     async def handle_async_request(self, request):
-        assert request.url.scheme == 'https' and request.url.host == 'api.anthropic.com'
+        session = load_session(Path(os.environ['AICTRL_SESSION_FILE']))
+        expected = 'chatgpt.com' if session.adapter == 'codex' else 'api.anthropic.com'
+        assert request.url.scheme == 'https' and request.url.host == expected
         assert 'x-aictrl-session' not in request.headers
         url = request.url.copy_with(scheme='http', host=os.environ['AICTRL_SYNTHETIC_IP'], port=8081)
         synthetic = httpx.Request(request.method, url, headers=request.headers, content=request.content)

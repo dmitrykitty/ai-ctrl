@@ -1,5 +1,9 @@
 .PHONY: bootstrap prepare test test-fast doctor claude-image runtime-image gateway-image proxy-image claude-version claude-auth-status claude-login compose-config verify-auth-boundary verify-claude-state verify-runtime-boundary verify-gateway-boundary
-.PHONY: codex-image codex-version codex-auth-status codex-login
+.PHONY: codex-image codex-version codex-auth-status codex-login verify-codex-boundary
+.DEFAULT_GOAL := bootstrap
+
+verify-codex-boundary:
+	./scripts/uv.sh run --frozen python scripts/verify-codex-boundary.py
 
 codex-image:
 	bash ./scripts/codex-image.sh
@@ -52,6 +56,7 @@ claude-login:
 compose-config:
 	docker compose -f docker/compose.yaml --profile runtime config --quiet
 	docker compose -f docker/compose.auth.yaml config --quiet
+	docker compose -f docker/compose.codex-auth.yaml config --quiet
 
 verify-auth-boundary:
 	./scripts/verify-auth-boundary.sh
