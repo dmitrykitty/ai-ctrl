@@ -1,8 +1,10 @@
 """Native Responses over HTTP/SSE, sharing the existing admission pipeline."""
 from aictrl.gateway.anthropic import AnthropicGateway
 from aictrl.gateway.headers import codex_request_headers
+from aictrl.gateway.sse import ResponsesTerminal
 
-UPSTREAM = 'https://api.openai.com/v1'
+# Explicitly approved native-subscription origin. No caller/env selector.
+UPSTREAM = 'https://chatgpt.com/backend-api/codex'
 
 
 class ResponsesGateway(AnthropicGateway):
@@ -11,6 +13,7 @@ class ResponsesGateway(AnthropicGateway):
     paths = {'/codex/responses': 'responses'}
     upstream_paths = {'responses': UPSTREAM + '/responses'}
     provider_headers = staticmethod(codex_request_headers)
+    stream_observer = staticmethod(ResponsesTerminal)
 
     @staticmethod
     def valid_payload(payload: object) -> bool:

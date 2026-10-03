@@ -44,16 +44,15 @@ class RuntimeSupervisor:
         if not self.uid or not self.gid:
             raise RuntimeFailure('Run the host supervisor as a non-root user.')
         now = datetime.now(timezone.utc)
-        adapters = {'claude': (ClaudeAdapter, 'ANTHROPIC_MESSAGES', '/home/dev/.claude'),
-                    'codex': (CodexAdapter, 'RESPONSES', '/home/dev/.codex')}
+        adapters = {'claude': ClaudeAdapter, 'codex': CodexAdapter}
         if agent.adapter not in adapters:
             raise RuntimeFailure('Unsupported runtime adapter.')
-        adapter_type, protocol, state_mount = adapters[agent.adapter]
-        if agent.state_mount != state_mount:
+        adapter_type = adapters[agent.adapter]
+        if agent.state_mount != adapter_type.state_mount:
             raise RuntimeFailure('A dedicated matching provider state path is required.')
         identity = AgentSession(agent_id=agent.adapter, adapter=agent.adapter, user_id=f'uid-{self.uid}',
-                                profile_id='local', workspace=str(self.workspace), protocol=protocol,
-                                billing_mode='SUBSCRIPTION', started_at=now)
+                                profile_id='local', workspace=str(self.workspace), protocol=adapter_type.protocol,
+                                billing_mode=adapter_type.billing_mode, started_at=now)
         self.gateway_mode = settings.runtime.routing_mode == RoutingMode.APPLICATION_GATEWAY
         if self.gateway_mode:
             identity.session_token = SecretStr(secrets.token_urlsafe(48))
@@ -288,17 +287,18 @@ def run_agent(name: str, workspace: Path, project: Path = PROJECT_ROOT, *, promp
             raise ValueError('Timeout must be positive and no larger than the configured wall-clock limit.')
         settings = settings.model_copy(update={'limits': settings.limits.model_copy(update={'wall_time_seconds': timeout})})
     if name == 'claude':
-        provider, adapter_type, authenticated, protocol = settings.claude, ClaudeAdapter, claude_authenticated, 'ANTHROPIC_MESSAGES'
+        provider, adapter_type, authenticated = settings.claude, ClaudeAdapter, claude_authenticated
     elif name == 'codex' and settings.codex is not None:
-        provider, adapter_type, authenticated, protocol = settings.codex, CodexAdapter, codex_authenticated, 'RESPONSES'
+        provider, adapter_type, authenticated = settings.codex, CodexAdapter, codex_authenticated
         if settings.runtime.routing_mode != RoutingMode.APPLICATION_GATEWAY:
             raise RuntimeFailure('Codex requires APPLICATION_GATEWAY routing.')
     else:
         raise ValueError('Unsupported or unconfigured agent.')
     if not authenticated(provider.image):
         raise AuthenticationCheckError(f'{name.capitalize()} is not authenticated.\nRun:\n    make {name}-login')
+    protocol = adapter_type.protocol
     identity = AgentSession(agent_id=name, adapter=name, user_id=f'uid-{os.getuid()}', profile_id='local',
-                            workspace=str(selected), protocol=protocol, billing_mode='SUBSCRIPTION',
+                            workspace=str(selected), protocol=protocol, billing_mode=adapter_type.billing_mode,
                             started_at=datetime.now(timezone.utc))
     adapter = adapter_type(provider.image, RoutingMode.EGRESS_ONLY)
     agent = adapter.render_config(identity)

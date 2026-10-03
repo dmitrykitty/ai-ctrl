@@ -37,6 +37,10 @@ class AnthropicGateway:
     def valid_payload(payload: object) -> bool:
         return isinstance(payload, dict) and isinstance(payload.get('messages'), list)
 
+    @staticmethod
+    def stream_observer():
+        return None
+
     def __init__(self, session: GatewaySession, engine: PolicyEngine, store: EventStore,
                  client: httpx.AsyncClient) -> None:
         self.session, self.engine, self.store, self.client = session, engine, store, client
@@ -109,13 +113,22 @@ class AnthropicGateway:
 
         async def relay():
             reason = 'llm.upstream_failed'
+            observer = self.stream_observer()
             try:
                 async for chunk in upstream.aiter_raw():
+                    if observer is not None:
+                        observer.observe(chunk)
                     yield chunk
-                reason = 'llm.upstream_completed' if upstream.status_code < 400 else 'llm.upstream_failed'
+                if upstream.status_code < 400 and (observer is None or observer.completed and not observer.failed):
+                    reason = 'llm.upstream_completed'
             except httpx.HTTPError:
                 raise GatewayStreamFailure('AICTRL upstream stream interrupted.') from None
             finally:
+                # Codex closes immediately after response.completed, sometimes
+                # before HTTP EOF. A complete native terminal frame is evidence
+                # of success; arbitrary early disconnects remain failed.
+                if observer is not None and upstream.status_code < 400 and observer.completed and not observer.failed:
+                    reason = 'llm.upstream_completed'
                 try:
                     await upstream.aclose()
                 finally:

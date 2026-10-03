@@ -4,6 +4,8 @@ from aictrl.contracts import AgentSession
 
 class ClaudeAdapter:
     name = "claude"
+    protocol = 'ANTHROPIC_MESSAGES'
+    billing_mode = 'SUBSCRIPTION'
     entry_command = ("claude",)
     persistent_state_volume = "aictrl-claude-state"
     state_mount = "/home/dev/.claude"

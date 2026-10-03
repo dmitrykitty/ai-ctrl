@@ -4,6 +4,8 @@ from aictrl.contracts import AgentSession
 
 class CodexAdapter:
     name = 'codex'
+    protocol = 'RESPONSES'
+    billing_mode = 'SUBSCRIPTION'
     entry_command = ('codex', '--no-daemon', '--profile', 'aictrl')
     persistent_state_volume = 'aictrl-codex-state'
     state_mount = '/home/dev/.codex'
@@ -23,7 +25,7 @@ class CodexAdapter:
         self.image_ref, self.routing_mode = image_ref, RoutingMode(routing_mode)
 
     def render_config(self, session: AgentSession) -> AgentConfig:
-        if session.adapter != self.name or session.protocol != 'RESPONSES':
+        if session.adapter != self.name or session.protocol != self.protocol:
             raise ValueError('session belongs to a different adapter or protocol')
         environment = dict(self.environment)
         if self.routing_mode == RoutingMode.APPLICATION_GATEWAY:

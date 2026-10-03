@@ -58,12 +58,12 @@ def test_responses_preserve_raw_protocol_headers_sse_and_durable_events(tmp_path
     assert response.status_code == 200 and response.content == b''.join(FRAMES)
     assert len(calls) == 1
     request = calls[0]
-    assert str(request.url) == 'https://api.openai.com/v1/responses?x=a%2Fb&future=true'
+    assert str(request.url) == 'https://chatgpt.com/backend-api/codex/responses?x=a%2Fb&future=true'
     assert request.content == BODY
     assert request.headers['authorization'] == PROVIDER
     assert request.headers['chatgpt-account-id'] == 'synthetic-account'
     assert request.headers['x-codex-future-feature'] == 'retain'
-    assert request.headers['host'] == 'api.openai.com' and int(request.headers['content-length']) == len(BODY)
+    assert request.headers['host'] == 'chatgpt.com' and int(request.headers['content-length']) == len(BODY)
     assert not any(name in request.headers for name in ('x-aictrl-session','x-upstream-host','x-hop','connection'))
     assert response.headers['retry-after'] == '3' and response.headers['x-ratelimit-remaining-requests'] == '7'
     assert not any(name in response.headers for name in ('x-aictrl-session','x-hop','connection'))

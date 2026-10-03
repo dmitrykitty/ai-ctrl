@@ -64,7 +64,7 @@ def render_compose(project: Path, directory: Path, workspace: Path, settings: Pr
     if test_upstream_network is not None:
         # Deterministic Docker probes attach a synthetic backend to this network.
         topology['networks']['upstream'] = {'external': True, 'name': test_upstream_network}
-    if agent.adapter == 'codex':
+    if agent.adapter == 'codex' and agent.state_mount == '/home/dev/.codex':
         topology['volumes']['codex-state'] = topology['volumes'].pop('claude-state')
         container['volumes'][1] = 'codex-state:/home/dev/.codex'
         state_key = 'codex-state'
