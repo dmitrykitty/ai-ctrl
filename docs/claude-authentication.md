@@ -1,0 +1,44 @@
+# Native Claude subscription login
+
+The image contains actual Claude Code 2.1.285 installed with the [official native installer](https://code.claude.com/docs/en/setup). Login uses the native command `claude auth login --claudeai`. No custom OAuth bridge or API key is configured. The subscription is confirmed by the approved plan; the user's account authorization must still be completed in the native flow.
+
+```bash
+make claude-image
+make claude-login
+```
+
+Use an interactive host terminal. Open the authorization URL printed by the CLI in your host browser. Follow the provider's sign-in/consent flow and enter any returned code only in that terminal. Do not put codes, tokens, or credentials in chat, project configuration, or platform logs. The command has a ten-minute timeout; rerun it if the flow expires. Cancellation preserves state and removes the temporary proxy/network containers.
+
+The helper creates `aictrl-claude-state` and attaches it at `/home/dev/.claude`, with `CLAUDE_CONFIG_DIR` set to the same path. State is owned by container UID/GID 501 with directory mode 0700. It mounts no host home/configuration directory and no workspace. It refuses an active provider-state container; the fixed login container name also prevents concurrent login containers.
+
+Provider authentication state can exist inside the dedicated agent state volume because the selected agent requires it. Enterprise resource credentials must never be placed there. The agent may access its own provider authentication/history. Ordinary shutdown does not delete that volume. Credential deletion is a separate explicit operation; no cleanup command here removes provider state.
+
+## Authentication network coverage
+
+The agent joins only an internal Docker network and can reach the authentication proxy's designated IPv4 address on TCP 8080. The trusted bootstrap blocks direct internet, embedded/external DNS, IPv6, UDP, and unrelated container destinations, then drops all capability sets and switches to `dev`. No Docker socket is mounted.
+
+The transport permits HTTPS CONNECT only to these exact hosts on port 443:
+
+- `claude.ai` and `claude.com`: subscription sign-in.
+- `platform.claude.com` and `console.anthropic.com`: native OAuth/account endpoints, including compatibility with the installed CLI.
+- `api.anthropic.com`: native connectivity and account checks during authentication.
+
+These roles were checked against [Anthropic's network requirements](https://code.claude.com/docs/en/network-config) and [authentication documentation](https://code.claude.com/docs/en/authentication). The proxy resolves provider names itself and refuses non-public resolved addresses. TLS remains end-to-end: coverage is explicitly destination and port only. No TLS downgrade occurs. The bootstrap entrypoint accepts only the native login command; it cannot launch an agent or model conversation. Runtime gateway routing, protected-operation inspection, and general egress enforcement are later milestones.
+
+Updates, optional traffic, and subscription MCP connectors are disabled. Login never inherits host `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, or gateway credentials. Browser traffic stays on the host and does not run in this container.
+
+## Verify without displaying credentials
+
+```bash
+make claude-version
+make verify-claude-state
+make verify-auth-boundary
+docker run --rm --network none --cap-drop ALL \
+  --security-opt no-new-privileges:true --user 501:501 \
+  --mount type=volume,source=aictrl-claude-state,target=/home/dev/.claude \
+  --entrypoint claude aictrl-claude:2.1.285-t01 auth status
+```
+
+Stop an active provider-state container before these checks. `auth status` reports native login state; it does not perform a model request. A not-yet-authenticated status is a real blocker for T03, separate from T01 image and persistence verification. Do not inspect or print the credentials file to verify login.
+
+The Python/socket probes exercise the actual T01 authentication boundary. They are not evidence for the future real-agent integration checkpoint. T01 status and any observed browser/login blocker are recorded in `NOTES.md`.
