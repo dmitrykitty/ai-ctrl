@@ -1,6 +1,6 @@
 # AI Control Layer
 
-Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01, T02 and T03 are complete. T03 native subscription forwarding, policy admission and durable events are verified. Stop after T03; do not start T04.
+Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T04 are complete. T03 native subscription forwarding and T04 repeatable integration proof are verified. T05 is next; stop after T04 and do not start T05 without its instruction.
 
 ## Goal and architecture
 
@@ -14,7 +14,7 @@ Use typed Python, explicit errors, small modules, and pinned dependencies. Keep 
 
 ## Commands and checks
 
-Verified commands and environmental failures are recorded in `NOTES.md`. Use `make bootstrap`, `./scripts/uv.sh sync --frozen`, `.venv/bin/aictrl --help`, `make doctor`, `make test`, `make claude-image`, `make claude-auth-status`, `make claude-login`, `make verify-claude-state`, and `make verify-auth-boundary`. Native status reports authenticated. T02 actual runtime isolation, workspace writes, limits, signal/deadline cleanup, interactive Claude and a live subscription response have passed. Use `make runtime-image`, `make gateway-image`, `make test-fast` and `make verify-gateway-boundary` for T03. Native Claude returned AICTRL_GATEWAY_OK; the final offline suite passed 127 tests and focused Docker qualification passed 47 checks. `aictrl events --session <uuid>` reads safe audit data. `make verify-runtime-boundary` explicitly selects EGRESS_ONLY; authentication-only probes do not qualify the application gateway.
+Verified commands and environmental failures are recorded in `NOTES.md`. Use `make bootstrap`, `./scripts/uv.sh sync --frozen`, `.venv/bin/aictrl --help`, `make doctor`, `make test`, `make claude-image`, `make claude-auth-status`, `make claude-login`, `make verify-claude-state`, and `make verify-auth-boundary`. Native status reports authenticated. T02 actual runtime isolation, workspace writes, limits, signal/deadline cleanup, interactive Claude and a live subscription response have passed. Use `make runtime-image`, `make gateway-image`, `make test-fast` and `make verify-gateway-boundary` for T03. Native Claude returned AICTRL_GATEWAY_OK; the final offline suite passed 127 tests and focused Docker qualification passed 47 checks. `aictrl events --session <uuid>` reads safe audit data. `aictrl verify claude demo/project` proves a real reply, forbidden application request, direct bypass denial, audit attribution and cleanup in one managed session. T04 passed once live, with 24 targeted tests and 151 final offline tests. Verification reuses unchanged production images/topology; gateway decisions are durable events, while kernel bypass denial is a probe result. `make verify-runtime-boundary` explicitly selects EGRESS_ONLY; authentication-only probes do not qualify the application gateway.
 
 ## Security invariants
 

@@ -1,6 +1,42 @@
 # Implementation notes
 
-T03 STATUS: PASS. T01, T02 and T03 are COMPLETE. Stop here; T04 has not started. The active configuration is APPLICATION_GATEWAY with native Anthropic forwarding, minimal strict admission and durable safe events. `plan.md` and shared serialized contracts remain unchanged (schema 1).
+T04 STATUS: PASS. T01–T04 are COMPLETE. T05 is next; stop here and do not start it without its instruction. T04 adds proof orchestration only. The production supervisor, Compose topology, adapter, gateway, policy, store, firewall, proxy, dependency lock and image identities are unchanged; shared contracts remain schema 1.
+
+## T04 verified on 2026-10-03
+
+Command: `.venv/bin/aictrl verify claude demo/project`. One actual live invocation returned `T04 INTEGRATION PASS`, exit 0. Real Claude output was exactly `AICTRL_T04_OK`, native exit 0, using saved subscription authentication through APPLICATION_GATEWAY.
+
+One managed session `81a0a546-45f5-40a6-9840-5e3f8d71d9ee` owned the single identity/token, workspace, agent container, gateway and proxy for the entire proof. The same non-root sandbox then sent valid-identity GET `/anthropic/v1/messages`; existing policy rejected it with HTTP 403. The forbidden request had durable BLOCK with no ALLOW or upstream completion/failure event. Direct TCP to `1.1.1.1:443` failed while ignoring gateway/proxy variables. Optional inference CONNECT through the generic proxy also returned 403. No instruction asked Claude to perform an attack and global policy was not changed.
+
+After production cleanup, EventStore and `aictrl events --session 81a0a546-45f5-40a6-9840-5e3f8d71d9ee` confirmed:
+
+| Action | Event ID | Request ID | Reason |
+|---|---|---|---|
+| ALLOW | c17eb111-7220-469a-a5e7-beb7c4167f8b | 7064738f-6390-4f85-a5f4-744d48d33909 | llm.policy.allowed |
+| AUDIT | 3e4a08d0-7cbd-43ff-9d24-2bed6c321f7c | 7064738f-6390-4f85-a5f4-744d48d33909 | llm.upstream_completed |
+| BLOCK | 0167525b-1bcd-44aa-947d-d6ecb49393cf | be028472-eb17-44b0-b5bc-5d97de699d45 | llm.policy.blocked |
+
+All three identify that same real session, agent/adapter claude, LLM OUTBOUND, ANTHROPIC_MESSAGES, STRUCTURED, policy t03 and schema 1. ALLOW/AUDIT identify operation.messages; BLOCK identifies operation.unsupported. The live events occurred at 17:36:11–13 UTC.
+
+No session-labelled container, network or session-private volume remained, and the ephemeral host identity directory was removed. The workspace, `aictrl-claude-state` and `.aictrl/audit/events.sqlite3` survived. No authentication file was inspected, synthetic authentication substituted, provider state deleted, or credential/token/full prompt recorded in proof output or audit.
+
+Gateway decisions produce durable SecurityEvents. Kernel-level bypass rejection is a verified probe result, with no invented gateway event. The proxy denial is likewise a probe result; richer network telemetry remains later reporting scope.
+
+## T04 implementation and verification discipline
+
+`src/aictrl/runtime/integration.py` creates one production RuntimeSupervisor and uses its existing controlled command interface. The host sends trusted `integration_probe.py` source as Python command text; the smoke input stays on stdin. The workload invokes existing non-root UI preparation, then real native Claude and deterministic probes. There is no new runtime interface, image, mount, workspace fixture or alternate enforcement path. Native output is checked privately; only restricted safe results leave the sandbox. CLI emits concise PASS/FAIL lines and a session UUID.
+
+Host result aggregation requires successful native output/exit, denied application/proxy/direct probes, correlated ALLOW/completion, BLOCK for the exact forbidden request, correct attribution and cleanup/persistence. Wrong/missing/duplicate result envelopes and mismatched evidence fail the proof. Unexpected native output or operational exception details are not printed. CLI exit codes: 0 PASS, 1 failed checks, 2 unsupported agent/invalid input/unavailable prerequisites.
+
+24 focused tests passed in 0.21 seconds, covering unsupported agents, result aggregation, failed Claude/incorrect response, missing ALLOW/AUDIT/BLOCK, mismatched session/adapter/request, unexpectedly successful direct/proxy bypass, admission of the forbidden request, unsafe output, cleanup/persistence and one-supervisor orchestration with audit read after cleanup. One final `make test` passed 151 tests in 0.84 seconds. The actual proof ran once. No image was rebuilt, no full T03/T02 Docker verifier or redundant test-fast checkpoint was run, and documentation edits do not trigger more tests.
+
+No T04 blocker remains. Live provider availability and saved subscription are required for the integration command; ordinary tests remain offline. T04 adds integration evidence without guards, budgets, MCP, another agent or dashboard. New proof code is project-owned and reuses the existing dependency/runtime assets; attribution and architectural records need no redesign.
+
+T05 starting point: timeboxed second adapter/Codex integration if this healthy Claude path remains available, following the next milestone instruction. Do not begin T05 automatically.
+
+## Archived T03 record
+
+Historical T03 STATUS: PASS. T01–T03 were complete at that checkpoint; T04 was not yet started. The active configuration is APPLICATION_GATEWAY with native Anthropic forwarding, minimal strict admission and durable safe events. `plan.md` and shared serialized contracts remain unchanged (schema 1).
 
 ## T03 verified on 2026-10-03
 
