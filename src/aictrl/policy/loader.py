@@ -8,6 +8,9 @@ from aictrl.policy.models import Policy
 
 def load_policy(path: Path) -> Policy:
     try:
-        return Policy.model_validate(yaml.safe_load(path.read_text()))
+        candidate = yaml.safe_load(path.read_text())
+        if isinstance(candidate, dict) and candidate.get('schema_version') == 1:
+            raise ValueError('Policy schema 1 is unsupported; configuration schema 2 is required.')
+        return Policy.model_validate(candidate)
     except (OSError, yaml.YAMLError, ValidationError):
         raise ValueError('Policy is missing or invalid.') from None

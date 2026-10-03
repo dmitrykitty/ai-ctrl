@@ -1,9 +1,11 @@
 from aictrl.adapters.base import AgentConfig
-from aictrl.contracts import AgentSession
+from aictrl.contracts import AgentProtocol, AgentSession, BillingMode
 
 
 class DemoAgentAdapter:
     name = "demo-agent"
+    protocol = AgentProtocol.CHAT_COMPLETIONS
+    billing_mode = BillingMode.LOCAL
     entry_command = ("python", "/opt/aictrl/demo/agent/main.py")
     persistent_state_volume = None
     state_mount = None
@@ -25,3 +27,6 @@ class DemoAgentAdapter:
 
     def smoke_command(self) -> tuple[str, ...]:
         return ("python", "--version")
+
+    def prompt_command(self) -> tuple[str, ...]:
+        return self.entry_command

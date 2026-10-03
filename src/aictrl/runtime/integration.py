@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from aictrl.adapters.base import AgentConfig, RoutingMode
+from aictrl.adapters.base import RoutingMode
 from aictrl.adapters.claude import ClaudeAdapter
 from aictrl.contracts import SecurityEvent
 from aictrl.reporting.store import EventStore
@@ -96,13 +96,8 @@ def verify_claude(workspace: Path, project: Path = PROJECT_ROOT) -> IntegrationP
     if not claude_authenticated(settings.claude.image):
         raise AuthenticationCheckError('Claude is not authenticated. Run: make claude-login')
     adapter = ClaudeAdapter(settings.claude.image)
-    # RuntimeSupervisor creates the sole managed identity and calls the actual
-    # adapter with that identity. No extra session or provider state is created.
-    agent = AgentConfig(adapter=adapter.name, image_ref=adapter.image_ref, entry_command=adapter.entry_command,
-                        persistent_state_volume=adapter.persistent_state_volume, state_mount=adapter.state_mount,
-                        required_provider_endpoints=adapter.required_provider_endpoints)
     source = Path(__file__).with_name('integration_probe.py').read_text()
-    runtime = RuntimeSupervisor(selected, settings, agent, project)
+    runtime = RuntimeSupervisor(selected, settings, adapter, project)
     session_id = runtime.session.identity.session_id
     directory = Path(runtime.directory.name)
     code, output = runtime.run(('python', '-c', source), input_text=f'Reply with exactly: {EXPECTED}', capture_output=True)

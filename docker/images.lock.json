@@ -34,9 +34,9 @@
     "aictrl-claude@sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf"
   ],
   "gateway_local_ref": "aictrl-gateway:t05",
-  "gateway_image_id": "sha256:fd0e33ea05894cf9a0ffce7b065880bf5b5aa170c49b69fd9f859cfc90e912d0",
+  "gateway_image_id": "sha256:d6f9d844ce307f31f0f2124aab544804c304c7193d5639f46b754eda4ab0c874",
   "gateway_repo_digests": [
-    "aictrl-gateway@sha256:fd0e33ea05894cf9a0ffce7b065880bf5b5aa170c49b69fd9f859cfc90e912d0"
+    "aictrl-gateway@sha256:d6f9d844ce307f31f0f2124aab544804c304c7193d5639f46b754eda4ab0c874"
   ],
   "codex_version": "0.159.3",
   "codex_release_url": "https://github.com/openai/codex/releases/tag/rust-v0.159.3",

@@ -1,11 +1,11 @@
 from aictrl.adapters.base import AgentConfig, EndpointPurpose, ProviderEndpoint, RoutingMode
-from aictrl.contracts import AgentSession
+from aictrl.contracts import AgentProtocol, AgentSession, BillingMode
 
 
 class CodexAdapter:
     name = 'codex'
-    protocol = 'RESPONSES'
-    billing_mode = 'SUBSCRIPTION'
+    protocol = AgentProtocol.RESPONSES
+    billing_mode = BillingMode.SUBSCRIPTION
     entry_command = ('codex', '--no-daemon', '--profile', 'aictrl')
     persistent_state_volume = 'aictrl-codex-state'
     state_mount = '/home/dev/.codex'
@@ -41,3 +41,8 @@ class CodexAdapter:
 
     def exec_command(self) -> tuple[str, ...]:
         return (*self.entry_command, 'exec', '--skip-git-repo-check', '--ephemeral', '--color', 'never')
+
+    def prompt_command(self) -> tuple[str, ...]:
+        # Native exec prints its input on stderr. Keep that stream private;
+        # retain the final answer and native exit status on the shared runtime.
+        return ('bash', '-c', 'exec "$@" 2>/dev/null', 'aictrl-codex-exec', *self.exec_command())

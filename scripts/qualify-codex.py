@@ -1,11 +1,9 @@
 """Bounded native subscription qualification with safe failure classification."""
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 from aictrl.adapters.base import RoutingMode
 from aictrl.adapters.codex import CodexAdapter
-from aictrl.contracts import AgentSession
 from aictrl.reporting.store import EventStore
 from aictrl.runtime.codex_auth import codex_authenticated
 from aictrl.runtime.config import load_config
@@ -19,9 +17,7 @@ def main():
     assert codex_authenticated(settings.codex.image), 'Native ChatGPT authentication required'
     settings.limits.wall_time_seconds = 90
     workspace = PROJECT_ROOT/'demo/project'
-    identity = AgentSession(agent_id='codex',adapter='codex',user_id='local',profile_id='local',workspace=str(workspace),
-                            protocol='RESPONSES',billing_mode='SUBSCRIPTION',started_at=datetime.now(timezone.utc))
-    agent = CodexAdapter(settings.codex.image,RoutingMode.EGRESS_ONLY).render_config(identity)
+    agent = CodexAdapter(settings.codex.image, settings.runtime.routing_mode)
     runtime = RuntimeSupervisor(workspace,settings,agent)
     source = (PROJECT_ROOT/'tests/fixtures/codex_live_probe.py').read_text()
     code, output = runtime.run(('python','-c',source),input_text='Reply with exactly: AICTRL_CODEX_OK',capture_output=True)

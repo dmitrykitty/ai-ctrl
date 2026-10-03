@@ -1,4 +1,6 @@
-from aictrl.contracts import AgentProtocol, Channel, ControlDecision, ControlRequest, DecisionAction, Direction, InspectionLevel, PolicyContext
+"""Provider-independent exact matching: BLOCK wins, then ALLOW, else BLOCK."""
+
+from aictrl.contracts import ControlDecision, ControlRequest, DecisionAction, PolicyContext
 from aictrl.policy.models import Policy
 
 
@@ -8,27 +10,18 @@ class PolicyEngine:
 
     def decide(self, context: PolicyContext, request: ControlRequest) -> ControlDecision:
         agent = self.policy.agents.get(context.agent_id)
-        provider_operation = (
-            context.agent_id == 'claude'
-            and request.protocol == AgentProtocol.ANTHROPIC_MESSAGES
-            and request.target_id == 'anthropic'
-            and request.operation_id in ('messages', 'count_tokens')
-        ) or (
-            context.agent_id == 'codex'
-            and request.protocol == AgentProtocol.RESPONSES
-            and request.target_id == 'openai'
-            and request.operation_id == 'responses'
-        )
-        allowed = (
-            context.session_id == request.session_id
-            and context.policy_version == self.policy.policy_version
-            and agent is not None and agent.enabled
-            and request.channel == Channel.LLM and request.direction == Direction.OUTBOUND
-            and request.inspection_level == InspectionLevel.STRUCTURED
-            and provider_operation
-            and getattr(self.policy.llm, request.operation_id, 'BLOCK') == 'ALLOW'
-        )
+        allowed = False
+        if (context.session_id == request.session_id and context.policy_version == self.policy.policy_version
+                and agent is not None and agent.enabled):
+            for rule in agent.rules:
+                if (rule.channel == request.channel and rule.direction == request.direction
+                        and rule.protocol == request.protocol and rule.target == request.target_id
+                        and request.operation_id in rule.operations and rule.inspection_level == request.inspection_level):
+                    if rule.action == 'BLOCK':
+                        allowed = False
+                        break
+                    allowed = True
         return ControlDecision(request_id=request.request_id,
                                action=DecisionAction.ALLOW if allowed else DecisionAction.BLOCK,
-                               reason_code='llm.policy.allowed' if allowed else 'llm.policy.blocked',
+                               reason_code=str(request.channel).lower() + ('.policy.allowed' if allowed else '.policy.blocked'),
                                policy_version=self.policy.policy_version)

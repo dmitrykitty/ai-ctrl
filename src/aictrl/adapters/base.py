@@ -3,7 +3,7 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import Field
 
-from aictrl.contracts import AgentSession, Contract
+from aictrl.contracts import AgentProtocol, AgentSession, BillingMode, Contract
 
 
 class EndpointPurpose(StrEnum):
@@ -37,6 +37,8 @@ class AgentConfig(Contract):
 @runtime_checkable
 class AgentAdapter(Protocol):
     name: str
+    protocol: AgentProtocol
+    billing_mode: BillingMode
     image_ref: str
     entry_command: tuple[str, ...]
     persistent_state_volume: str | None
@@ -47,3 +49,5 @@ class AgentAdapter(Protocol):
     def render_config(self, session: AgentSession) -> AgentConfig: ...
 
     def smoke_command(self) -> tuple[str, ...]: ...
+
+    def prompt_command(self) -> tuple[str, ...]: ...

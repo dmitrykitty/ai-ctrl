@@ -5,6 +5,7 @@ from pathlib import Path
 
 import httpx
 
+from aictrl.contracts import AgentProtocol
 from aictrl.gateway.app import create_app
 from aictrl.gateway.session import load_session
 from aictrl.policy.loader import load_policy
@@ -17,7 +18,7 @@ class SyntheticTransport(httpx.AsyncBaseTransport):
 
     async def handle_async_request(self, request):
         session = load_session(Path(os.environ['AICTRL_SESSION_FILE']))
-        expected = 'chatgpt.com' if session.adapter == 'codex' else 'api.anthropic.com'
+        expected = 'chatgpt.com' if session.protocol == AgentProtocol.RESPONSES else 'api.anthropic.com'
         assert request.url.scheme == 'https' and request.url.host == expected
         assert 'x-aictrl-session' not in request.headers
         url = request.url.copy_with(scheme='http', host=os.environ['AICTRL_SYNTHETIC_IP'], port=8081)

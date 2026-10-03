@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
-from aictrl.contracts import Identifier
+from aictrl.contracts import AgentProtocol, Identifier
 
 
 class GatewaySession(BaseModel):
@@ -14,6 +14,7 @@ class GatewaySession(BaseModel):
     session_id: UUID
     agent_id: Identifier
     adapter: Identifier
+    protocol: AgentProtocol
     user_id: Identifier
     profile_id: Identifier
     expires_at: AwareDatetime

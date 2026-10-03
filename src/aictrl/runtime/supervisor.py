@@ -13,16 +13,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pydantic import SecretStr
 
-from aictrl.adapters.base import AgentConfig, EndpointPurpose, RoutingMode
-from aictrl.adapters.claude import ClaudeAdapter
-from aictrl.adapters.codex import CodexAdapter
+from aictrl.adapters.base import AgentAdapter, EndpointPurpose, RoutingMode
 from aictrl.contracts import AgentSession, SessionState
-from aictrl.runtime.auth import AUTH_CONTAINER, CLAUDE_STATE, AuthenticationCheckError, claude_authenticated
-from aictrl.runtime.codex_auth import CODEX_AUTH_CONTAINER, CODEX_STATE, codex_authenticated
-from aictrl.runtime.compose import render_compose
+from aictrl.runtime.auth import AuthenticationCheckError
+from aictrl.runtime.compose import provider_lease_name, render_compose, validate_provider_state
 from aictrl.runtime.config import ProjectConfig, load_config
 from aictrl.runtime.docker import RuntimeDeadline, RuntimeFailure, docker, free_subnet
 from aictrl.runtime.workspace import PROJECT_ROOT, validate_workspace
+from aictrl.runtime.registry import resolve_agent
 from aictrl.policy.loader import load_policy
 
 
@@ -35,29 +33,25 @@ class ManagedSession:
 
 
 class RuntimeSupervisor:
-    def __init__(self, workspace: Path, settings: ProjectConfig, agent: AgentConfig,
+    def __init__(self, workspace: Path, settings: ProjectConfig, adapter: AgentAdapter,
                  project: Path = PROJECT_ROOT, *, interactive: bool = False,
                  test_upstream_network: str | None = None) -> None:
         self.workspace = validate_workspace(workspace, project)
-        self.settings, self.agent, self.project = settings, agent, project
+        self.settings, self.adapter, self.project = settings, adapter, project
         self.uid, self.gid = os.getuid(), os.getgid()
         if not self.uid or not self.gid:
             raise RuntimeFailure('Run the host supervisor as a non-root user.')
         now = datetime.now(timezone.utc)
-        adapters = {'claude': ClaudeAdapter, 'codex': CodexAdapter}
-        if agent.adapter not in adapters:
-            raise RuntimeFailure('Unsupported runtime adapter.')
-        adapter_type = adapters[agent.adapter]
-        if agent.state_mount != adapter_type.state_mount:
-            raise RuntimeFailure('A dedicated matching provider state path is required.')
-        identity = AgentSession(agent_id=agent.adapter, adapter=agent.adapter, user_id=f'uid-{self.uid}',
-                                profile_id='local', workspace=str(self.workspace), protocol=adapter_type.protocol,
-                                billing_mode=adapter_type.billing_mode, started_at=now)
+        validate_provider_state(adapter.persistent_state_volume, adapter.state_mount)
         self.gateway_mode = settings.runtime.routing_mode == RoutingMode.APPLICATION_GATEWAY
-        if self.gateway_mode:
-            identity.session_token = SecretStr(secrets.token_urlsafe(48))
-            rendered = adapter_type(agent.image_ref, RoutingMode.APPLICATION_GATEWAY).render_config(identity)
-            self.agent = agent.model_copy(update={'environment': dict(agent.environment) | rendered.environment})
+        identity = AgentSession(agent_id=adapter.name, adapter=adapter.name, user_id=f'uid-{self.uid}',
+                                profile_id='local', workspace=str(self.workspace), protocol=adapter.protocol,
+                                billing_mode=adapter.billing_mode, started_at=now,
+                                session_token=SecretStr(secrets.token_urlsafe(48)) if self.gateway_mode else None)
+        self.agent = adapter.render_config(identity)
+        if (self.agent.adapter != adapter.name or self.agent.persistent_state_volume != adapter.persistent_state_volume
+                or self.agent.state_mount != adapter.state_mount):
+            raise RuntimeFailure('Rendered adapter identity/provider state differs from trusted metadata.')
         self.identifier = identity.session_id.hex
         self.session = ManagedSession(identity, 'aictrl-' + self.identifier + '-agent', now + timedelta(seconds=settings.limits.wall_time_seconds))
         self._deadline = time.monotonic() + settings.limits.wall_time_seconds
@@ -110,7 +104,7 @@ class RuntimeSupervisor:
             audit.chmod(0o700)
         # Reserve the same engine-level name used by authentication operations.
         # This stopped container holds no mounts and prevents concurrent state use.
-        lock_name = {CLAUDE_STATE: AUTH_CONTAINER, CODEX_STATE: CODEX_AUTH_CONTAINER}.get(volume, 'aictrl-' + self.identifier + '-state-lock')
+        lock_name = provider_lease_name(volume)
         self.lock_name = lock_name
         self.lock_id = self._docker(['create', '--name', lock_name, '--label', 'io.aictrl.session=' + self.identifier,
                                '--label', 'io.aictrl.managed=true', '--network', 'none', '--cap-drop', 'ALL',
@@ -132,7 +126,7 @@ class RuntimeSupervisor:
         destination_file.chmod(0o444)
         if self.gateway_mode:
             identity = self.session.identity
-            record = {name: str(getattr(identity, name)) for name in ('session_id', 'agent_id', 'adapter', 'user_id', 'profile_id')}
+            record = {name: str(getattr(identity, name)) for name in ('session_id', 'agent_id', 'adapter', 'user_id', 'profile_id', 'protocol')}
             record['expires_at'] = self.session.deadline.isoformat()
             record['session_token'] = identity.session_token.get_secret_value()
             session_file = Path(self.directory.name) / 'session.json'
@@ -286,36 +280,22 @@ def run_agent(name: str, workspace: Path, project: Path = PROJECT_ROOT, *, promp
         if not 1 <= timeout <= settings.limits.wall_time_seconds:
             raise ValueError('Timeout must be positive and no larger than the configured wall-clock limit.')
         settings = settings.model_copy(update={'limits': settings.limits.model_copy(update={'wall_time_seconds': timeout})})
-    if name == 'claude':
-        provider, adapter_type, authenticated = settings.claude, ClaudeAdapter, claude_authenticated
-    elif name == 'codex' and settings.codex is not None:
-        provider, adapter_type, authenticated = settings.codex, CodexAdapter, codex_authenticated
-        if settings.runtime.routing_mode != RoutingMode.APPLICATION_GATEWAY:
-            raise RuntimeFailure('Codex requires APPLICATION_GATEWAY routing.')
-    else:
-        raise ValueError('Unsupported or unconfigured agent.')
-    if not authenticated(provider.image):
-        raise AuthenticationCheckError(f'{name.capitalize()} is not authenticated.\nRun:\n    make {name}-login')
-    protocol = adapter_type.protocol
-    identity = AgentSession(agent_id=name, adapter=name, user_id=f'uid-{os.getuid()}', profile_id='local',
-                            workspace=str(selected), protocol=protocol, billing_mode=adapter_type.billing_mode,
-                            started_at=datetime.now(timezone.utc))
-    adapter = adapter_type(provider.image, RoutingMode.EGRESS_ONLY)
-    agent = adapter.render_config(identity)
-    runtime = RuntimeSupervisor(selected, settings, agent, project, interactive=prompt is None and sys.stdin.isatty() and sys.stdout.isatty())
-    command = agent.entry_command
-    if prompt is not None:
-        if name == 'claude':
-            command = ('claude', '--print', '--output-format', 'text')
-        else:
-            # Native exec prints its complete input on stderr. Keep diagnostics
-            # ephemeral and return only its final answer and exit status.
-            command = ('bash', '-c', 'exec "$@" 2>/dev/null', 'aictrl-codex-exec', *adapter.exec_command())
-    coverage = f'structured {protocol} admission' if runtime.gateway_mode else 'HTTPS destination enforcement'
+    spec = resolve_agent(name)
+    provider = spec.config(settings)
+    if provider is None:
+        raise ValueError('Runtime agent is not configured.')
+    if spec.requires_gateway and settings.runtime.routing_mode != RoutingMode.APPLICATION_GATEWAY:
+        raise RuntimeFailure('Selected agent requires APPLICATION_GATEWAY routing.')
+    if not spec.authenticated(provider.image):
+        raise AuthenticationCheckError(f'{name} is not authenticated.\nRun:\n    {spec.login_hint}')
+    adapter = spec.factory(provider.image, settings.runtime.routing_mode)
+    runtime = RuntimeSupervisor(selected, settings, adapter, project, interactive=prompt is None and sys.stdin.isatty() and sys.stdout.isatty())
+    command = adapter.prompt_command() if prompt is not None else adapter.entry_command
+    coverage = f'structured {adapter.protocol} admission' if runtime.gateway_mode else 'HTTPS destination enforcement'
     print(f'AICTRL session {runtime.identifier}: {settings.runtime.routing_mode}, {coverage}, UID/GID {runtime.uid}:{runtime.gid}', flush=True)
     result, _ = runtime.run(command, input_text=prompt)
-    if result and name == 'codex':
-        print('Codex exited unsuccessfully; inspect safe session events for gateway admission.', file=sys.stderr)
+    if result:
+        print('Agent exited unsuccessfully; inspect safe session events for gateway admission.', file=sys.stderr)
     return result
 
 

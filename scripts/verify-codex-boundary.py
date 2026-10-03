@@ -8,14 +8,12 @@ import time
 import uuid
 import sys
 from collections import Counter
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from aictrl.adapters.base import RoutingMode
 from aictrl.adapters.codex import CodexAdapter
 from aictrl.adapters.claude import ClaudeAdapter
-from aictrl.contracts import AgentSession
 from aictrl.reporting.store import EventStore
 from aictrl.runtime.config import load_config
 from aictrl.runtime.docker import docker, RuntimeFailure
@@ -36,17 +34,14 @@ def verify_leases():
     checks, sessions = {}, []
     def runtime(adapter, settings):
         workspace = PROJECT_ROOT/'demo/project'
-        identity = AgentSession(agent_id=adapter.name,adapter=adapter.name,user_id='local',profile_id='local',
-                                workspace=str(workspace),protocol=adapter.protocol,billing_mode=adapter.billing_mode,
-                                started_at=datetime.now(timezone.utc))
-        selected = RuntimeSupervisor(workspace,settings,adapter.render_config(identity))
+        selected = RuntimeSupervisor(workspace, settings, adapter)
         sessions.append(selected)
         return selected
     settings = load_config(PROJECT_ROOT)
     try:
-        first = runtime(CodexAdapter(settings.codex.image,RoutingMode.EGRESS_ONLY),settings)
+        first = runtime(CodexAdapter(settings.codex.image,settings.runtime.routing_mode),settings)
         first.prepare()
-        other = runtime(CodexAdapter(settings.codex.image,RoutingMode.EGRESS_ONLY),settings)
+        other = runtime(CodexAdapter(settings.codex.image,settings.runtime.routing_mode),settings)
         try: other.prepare()
         except RuntimeFailure: checks['second_codex_refused']=True
         else: checks['second_codex_refused']=False
@@ -55,7 +50,7 @@ def verify_leases():
         try: codex_authenticated(settings.codex.image)
         except AuthenticationCheckError: checks['concurrent_authentication_refused']=True
         else: checks['concurrent_authentication_refused']=False
-        claude = runtime(ClaudeAdapter(settings.claude.image,RoutingMode.EGRESS_ONLY),settings)
+        claude = runtime(ClaudeAdapter(settings.claude.image,settings.runtime.routing_mode),settings)
         claude.prepare()
         checks['claude_and_codex_independent_leases'] = first._owned(first.lock_id) and claude._owned(claude.lock_id) and first.lock_name != claude.lock_name
     finally:
@@ -100,9 +95,7 @@ def main():
             (workspace/'input.txt').write_text('host workspace\n')
             before = workspace.stat()
             settings = load_config(PROJECT_ROOT); settings.limits.wall_time_seconds = 120
-            session = AgentSession(agent_id='codex',adapter='codex',user_id='test',profile_id='local',workspace=str(workspace),
-                                   protocol='RESPONSES',billing_mode='SUBSCRIPTION',started_at=datetime.now(timezone.utc))
-            agent = CodexAdapter(settings.codex.image,RoutingMode.EGRESS_ONLY).render_config(session)
+            agent = CodexAdapter(settings.codex.image, settings.runtime.routing_mode)
             agent.persistent_state_volume = volume
             current = RuntimeSupervisor(workspace,settings,agent,project,test_upstream_network=network)
             current.prepare()
@@ -140,7 +133,7 @@ def main():
             manifest['services']['agent']['environment'].update({'AICTRL_TEST_TARGET_IP':target_ip,'AICTRL_TEST_SIBLING_IP':sibling_ip,
                     'AICTRL_TEST_HOST_IP':host_ip,'AICTRL_TEST_HOST_PORT':str(host.server_port)})
             current.manifest.write_text(json.dumps(manifest))
-            checks['agent_only_workspace_state_public_ca_mounts'] = len(manifest['services']['agent']['volumes']) == 3 and manifest['services']['agent']['volumes'][1] == 'codex-state:/home/dev/.codex'
+            checks['agent_only_workspace_state_public_ca_mounts'] = len(manifest['services']['agent']['volumes']) == 3 and manifest['services']['agent']['volumes'][1] == 'provider-state:/home/dev/.codex'
             identifier = current.identifier; session_id = current.session.identity.session_id
             code, output = current.run(('python','/workspace/codex_probe.py'),capture_output=True)
             line = next((line for line in output.splitlines() if line.startswith('AICTRL_CODEX_PROBE ')),None)

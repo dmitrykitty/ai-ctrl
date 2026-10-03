@@ -11,7 +11,6 @@ from aictrl.runtime.docker import RuntimeFailure
 from aictrl.runtime.supervisor import RuntimeSupervisor
 from aictrl.runtime.workspace import PROJECT_ROOT
 
-from test_runtime import session
 
 
 def prepared(tmp_path, monkeypatch, *, pin_inference=False):
@@ -26,7 +25,7 @@ def prepared(tmp_path, monkeypatch, *, pin_inference=False):
     assert settings.runtime.routing_mode == RoutingMode.APPLICATION_GATEWAY
     if pin_inference:
         settings.runtime.test_destinations = (Destination(host='api.anthropic.com', port=443, connect_ip='172.29.1.2'),)
-    agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(session())
+    agent = ClaudeAdapter(settings.claude.image, settings.runtime.routing_mode)
     # Duplicating the inference host as AUTH must not open an alternate path.
     agent.required_provider_endpoints += (ProviderEndpoint(host='api.anthropic.com', purpose=EndpointPurpose.AUTHENTICATION),)
     runtime = RuntimeSupervisor(workspace, settings, agent, project)
@@ -59,7 +58,7 @@ def test_gateway_manifest_identity_storage_and_proxy_partition(tmp_path, monkeyp
         secret_file = directory / 'session.json'
         record = json.loads(secret_file.read_text())
         assert secret_file.stat().st_mode & 0o777 == 0o400
-        assert set(record) == {'session_id', 'agent_id', 'adapter', 'user_id', 'profile_id', 'expires_at', 'session_token'}
+        assert set(record) == {'session_id', 'agent_id', 'adapter', 'user_id', 'profile_id', 'protocol', 'expires_at', 'session_token'}
         assert record['session_token'] == agent['environment']['ANTHROPIC_CUSTOM_HEADERS'].split(': ', 1)[1]
         assert record['session_token'] not in runtime.session.identity.model_dump_json()
         assert record['session_token'] not in repr(runtime.session.identity)

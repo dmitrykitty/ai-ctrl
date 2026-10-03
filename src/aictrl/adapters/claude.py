@@ -1,11 +1,11 @@
 from aictrl.adapters.base import AgentConfig, EndpointPurpose, ProviderEndpoint, RoutingMode
-from aictrl.contracts import AgentSession
+from aictrl.contracts import AgentProtocol, AgentSession, BillingMode
 
 
 class ClaudeAdapter:
     name = "claude"
-    protocol = 'ANTHROPIC_MESSAGES'
-    billing_mode = 'SUBSCRIPTION'
+    protocol = AgentProtocol.ANTHROPIC_MESSAGES
+    billing_mode = BillingMode.SUBSCRIPTION
     entry_command = ("claude",)
     persistent_state_volume = "aictrl-claude-state"
     state_mount = "/home/dev/.claude"
@@ -34,8 +34,8 @@ class ClaudeAdapter:
         self.routing_mode = RoutingMode(routing_mode)
 
     def render_config(self, session: AgentSession) -> AgentConfig:
-        if session.adapter != self.name:
-            raise ValueError("session belongs to a different adapter")
+        if session.adapter != self.name or session.protocol != self.protocol:
+            raise ValueError("session belongs to a different adapter or protocol")
         if self.routing_mode == RoutingMode.APPLICATION_GATEWAY and session.session_token is None:
             raise ValueError("supervisor must supply an internal session token")
         environment = dict(self.environment)
@@ -58,3 +58,6 @@ class ClaudeAdapter:
 
     def smoke_command(self) -> tuple[str, ...]:
         return ("claude", "--version")
+
+    def prompt_command(self) -> tuple[str, ...]:
+        return ("claude", "--print", "--output-format", "text")

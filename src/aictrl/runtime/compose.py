@@ -1,5 +1,6 @@
 """Render the reused topology with host-controlled session configuration."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -8,10 +9,29 @@ from aictrl.adapters.base import AgentConfig, RoutingMode
 from aictrl.runtime.config import ProjectConfig
 
 
+def validate_provider_state(volume: str | None, mount: str | None) -> None:
+    """Accept a named volume and one provider home from trusted adapter code.
+
+    This is not a host bind/path selector. No traversal, wildcard, nested
+    symlink path or Docker mount syntax can pass this boundary.
+    """
+    if not volume or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}', volume):
+        raise ValueError('A safe dedicated provider volume name is required.')
+    if not mount or not re.fullmatch(r'/home/dev/\.[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}', mount):
+        raise ValueError('A dedicated absolute provider home path is required.')
+
+
+def provider_lease_name(volume: str) -> str:
+    # One stable engine reservation for every use of the same named volume,
+    # including the existing authentication containers.
+    return volume.removesuffix('-state') + '-auth'
+
+
 def render_compose(project: Path, directory: Path, workspace: Path, settings: ProjectConfig,
                    agent: AgentConfig, session: str, subnet: str, proxy_ip: str,
                    uid: int, gid: int, interactive: bool,
                    test_upstream_network: str | None = None) -> dict:
+    validate_provider_state(agent.persistent_state_volume, agent.state_mount)
     topology = yaml.safe_load((project / 'docker/compose.yaml').read_text())
     topology['name'] = 'aictrl-' + session
     labels = {'io.aictrl.session': session, 'io.aictrl.managed': 'true'}
@@ -64,15 +84,8 @@ def render_compose(project: Path, directory: Path, workspace: Path, settings: Pr
     if test_upstream_network is not None:
         # Deterministic Docker probes attach a synthetic backend to this network.
         topology['networks']['upstream'] = {'external': True, 'name': test_upstream_network}
-    if agent.adapter == 'codex' and agent.state_mount == '/home/dev/.codex':
-        topology['volumes']['codex-state'] = topology['volumes'].pop('claude-state')
-        container['volumes'][1] = 'codex-state:/home/dev/.codex'
-        state_key = 'codex-state'
-    elif agent.adapter == 'claude' and agent.state_mount == '/home/dev/.claude':
-        state_key = 'claude-state'
-    else:
-        raise ValueError('Unsupported provider state mapping.')
-    topology['volumes'][state_key]['name'] = agent.persistent_state_volume
+    container['volumes'][1] = 'provider-state:' + agent.state_mount
+    topology['volumes']['provider-state'] = {'external': True, 'name': agent.persistent_state_volume}
     for name in ('proxy-private-ca', 'proxy-public-ca'):
         topology['volumes'][name]['labels'] = labels
     return topology

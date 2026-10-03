@@ -8,7 +8,7 @@ import pytest
 
 from aictrl.gateway.app import create_app
 from aictrl.gateway.session import GatewaySession
-from aictrl.policy.models import AgentPolicy, LLMPolicy, Policy
+from aictrl.policy.models import AdmissionRule, AgentPolicy, Policy
 from aictrl.reporting.store import EventStore, StoreFailure
 from test_gateway import Frames, TOKEN, PROVIDER, PROMPT
 
@@ -22,11 +22,12 @@ BODY = json.dumps({'model':'native-model','instructions':PROMPT,'input':[{'role'
 
 
 def fixture(tmp_path, *, enabled=True, action='ALLOW', status=200, store_error=False):
-    session = GatewaySession(session_id=uuid4(), agent_id='codex', adapter='codex', user_id='local', profile_id='default',
+    session = GatewaySession(session_id=uuid4(), agent_id='codex', adapter='codex', protocol='RESPONSES', user_id='local', profile_id='default',
                              expires_at=datetime.now(timezone.utc)+timedelta(minutes=5),session_token=TOKEN)
-    policy = Policy(schema_version=1,policy_version='t05',default_action='BLOCK',
-                    agents={'codex':AgentPolicy(enabled=enabled),'claude':AgentPolicy(enabled=True)},
-                    llm=LLMPolicy(responses=action,messages='ALLOW'))
+    policy = Policy(schema_version=2, policy_version='t05', default_action='BLOCK',
+                    agents={'codex': AgentPolicy(enabled=enabled, rules=(AdmissionRule(
+                        id='native.responses', channel='LLM', direction='OUTBOUND', protocol='RESPONSES',
+                        target='openai', operations=('responses',), action=action),))})
     store = EventStore(tmp_path/'events.sqlite3')
     if store_error:
         def fail(event): raise StoreFailure('safe store failure')

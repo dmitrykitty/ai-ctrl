@@ -17,13 +17,11 @@ from pathlib import Path
 
 from aictrl.adapters.base import RoutingMode
 from aictrl.adapters.claude import ClaudeAdapter
-from aictrl.contracts import AgentSession
 from aictrl.reporting.store import EventStore
 from aictrl.runtime.config import TestDestination, load_config
 from aictrl.runtime.docker import docker
 from aictrl.runtime.supervisor import RuntimeSupervisor
 from aictrl.runtime.workspace import PROJECT_ROOT
-from datetime import datetime, timezone
 
 
 def clean_session(identifier):
@@ -80,9 +78,7 @@ def main():
                 settings = load_config(PROJECT_ROOT)
                 settings.runtime.test_destinations = (TestDestination(host='allowed.test', port=8081, connect_ip=target_ip),)
                 settings.limits.wall_time_seconds = 90
-                session = AgentSession(agent_id='claude', adapter='claude', user_id='test', profile_id='local', workspace=str(workspace),
-                                       protocol='ANTHROPIC_MESSAGES', billing_mode='SUBSCRIPTION', started_at=datetime.now(timezone.utc))
-                agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(session)
+                agent = ClaudeAdapter(settings.claude.image, settings.runtime.routing_mode)
                 agent.persistent_state_volume = volume
                 return RuntimeSupervisor(workspace, settings, agent, project, test_upstream_network=network)
 

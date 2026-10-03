@@ -8,7 +8,7 @@ import pytest
 
 from aictrl.gateway.app import create_app
 from aictrl.gateway.session import GatewaySession
-from aictrl.policy.models import AgentPolicy, LLMPolicy, Policy
+from aictrl.policy.models import AdmissionRule, AgentPolicy, Policy
 from aictrl.reporting.store import EventStore, StoreFailure
 
 TOKEN = 'synthetic_internal_identity_abcdefghijklmnopqrstuvwxyz'
@@ -35,11 +35,17 @@ class Frames(httpx.AsyncByteStream):
         self.closed = True
 
 
+def native_policy(*, enabled=True, action='ALLOW', version='t03'):
+    rule = AdmissionRule(id='native.messages', channel='LLM', direction='OUTBOUND', protocol='ANTHROPIC_MESSAGES',
+                         target='anthropic', operations=('messages', 'count_tokens'), action=action)
+    return Policy(schema_version=2, policy_version=version, default_action='BLOCK',
+                  agents={'claude': AgentPolicy(enabled=enabled, rules=(rule,))})
+
+
 def fixture(tmp_path, *, policy=None, status=200, frames=None):
-    session = GatewaySession(session_id=uuid4(), agent_id='claude', adapter='claude', user_id='local', profile_id='default',
+    session = GatewaySession(session_id=uuid4(), agent_id='claude', adapter='claude', protocol='ANTHROPIC_MESSAGES', user_id='local', profile_id='default',
                              expires_at=datetime.now(timezone.utc) + timedelta(minutes=5), session_token=TOKEN)
-    policy = policy or Policy(schema_version=1, policy_version='t03', default_action='BLOCK',
-                              agents={'claude': AgentPolicy(enabled=True)}, llm=LLMPolicy(messages='ALLOW', count_tokens='ALLOW'))
+    policy = policy or native_policy()
     store = EventStore(tmp_path / 'events.sqlite3')
     calls = []
 
@@ -119,8 +125,7 @@ def test_unsupported_method_and_path_are_durably_blocked(tmp_path, method, path)
 
 @pytest.mark.parametrize('enabled,operation', [(False, 'ALLOW'), (True, 'BLOCK')])
 def test_disabled_or_denied_policy_never_calls_upstream(tmp_path, enabled, operation):
-    policy = Policy(schema_version=1, policy_version='denied', default_action='BLOCK',
-                    agents={'claude': AgentPolicy(enabled=enabled)}, llm=LLMPolicy(messages=operation))
+    policy = native_policy(enabled=enabled, action=operation, version='denied')
     app, store, session, calls, client = fixture(tmp_path, policy=policy)
     assert asyncio.run(invoke(app, client)).status_code == 403 and not calls
     assert store.events(session.session_id)[0].policy_version == 'denied'
@@ -231,7 +236,7 @@ def test_expired_identity_and_duplicate_headers_are_rejected(tmp_path):
     app, store, session, calls, client = fixture(tmp_path)
     expired = session.model_copy(update={'expires_at': datetime.now(timezone.utc) - timedelta(seconds=1)})
     assert not expired.accepts([TOKEN])
-    policy = Policy(schema_version=1, policy_version='t03', default_action='BLOCK', agents={'claude': AgentPolicy(enabled=True)}, llm=LLMPolicy(messages='ALLOW'))
+    policy = native_policy()
     app = create_app(expired, policy, store, client)
     assert asyncio.run(invoke(app, client)).status_code == 401 and not calls
     assert not session.accepts([TOKEN, TOKEN])
@@ -250,7 +255,7 @@ def test_preheader_upstream_error_is_not_retried_and_is_safely_audited(tmp_path)
         calls.append(request)
         raise httpx.ConnectError('synthetic-private-provider-details')
     client = httpx.AsyncClient(transport=httpx.MockTransport(fail), trust_env=False)
-    policy = Policy(schema_version=1, policy_version='t03', default_action='BLOCK', agents={'claude': AgentPolicy(enabled=True)}, llm=LLMPolicy(messages='ALLOW'))
+    policy = native_policy()
     app = create_app(session, policy, store, client)
     response = asyncio.run(invoke(app, client))
     assert response.status_code == 502 and len(calls) == 1

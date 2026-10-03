@@ -59,7 +59,7 @@ services:
         source: ${AICTRL_WORKSPACE:-../demo/project}
         target: /workspace
         bind: {create_host_path: false}
-      - claude-state:/home/dev/.claude
+      - provider-state:/home/dev/.claude
       - proxy-public-ca:/etc/aictrl:ro
     networks: [agent-internal]
     depends_on:
@@ -71,7 +71,7 @@ networks:
     ipam: {config: [{subnet: 172.30.87.0/24}]}
   upstream: {}
 volumes:
-  claude-state:
+  provider-state:
     external: true
     name: aictrl-claude-state
   proxy-private-ca: {}

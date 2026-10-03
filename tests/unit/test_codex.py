@@ -1,3 +1,4 @@
+from dataclasses import replace
 import json
 import subprocess
 import tomllib
@@ -14,6 +15,7 @@ from aictrl.runtime import codex_auth
 from aictrl.runtime.auth import AuthenticationCheckError
 from aictrl.runtime.config import CodexRuntime, TestDestination as Destination, load_config
 from aictrl.runtime.docker import RuntimeFailure
+from aictrl.runtime.registry import resolve_agent
 from aictrl.runtime.supervisor import RuntimeSupervisor, run_agent
 from aictrl.runtime.workspace import PROJECT_ROOT
 
@@ -100,7 +102,7 @@ def runtime(tmp_path, monkeypatch, *, pin=False):
     settings = load_config(PROJECT_ROOT)
     if pin:
         settings.runtime.test_destinations = (Destination(host='api.openai.com', port=443, connect_ip='172.29.1.2'),)
-    agent = CodexAdapter(settings.codex.image, RoutingMode.EGRESS_ONLY).render_config(identity())
+    agent = CodexAdapter(settings.codex.image, settings.runtime.routing_mode)
     agent.required_provider_endpoints += (ProviderEndpoint(host='api.openai.com', purpose=EndpointPurpose.AUTHENTICATION),)
     supervisor = RuntimeSupervisor(workspace, settings, agent, project)
     commands = []
@@ -119,9 +121,9 @@ def test_one_supervisor_selects_codex_identity_mounts_and_separate_lease(tmp_pat
         assert supervisor.session.identity.protocol == 'RESPONSES'
         topology = json.loads(supervisor.manifest.read_text())
         agent, gateway = topology['services']['agent'], topology['services']['gateway']
-        assert len(agent['volumes']) == 3 and agent['volumes'][1] == 'codex-state:/home/dev/.codex'
+        assert len(agent['volumes']) == 3 and agent['volumes'][1] == 'provider-state:/home/dev/.codex'
         assert 'claude-state' not in topology['volumes']
-        assert topology['volumes']['codex-state']['external']
+        assert topology['volumes']['provider-state']['external']
         assert agent['environment']['AICTRL_SESSION_TOKEN'] == supervisor.session.identity.session_token.get_secret_value()
         assert agent['networks'] == ['agent-internal'] and agent['cap_drop'] == ['ALL']
         assert len(gateway['volumes']) == 3 and '/home/dev/.codex' not in str(gateway['volumes'])
@@ -144,6 +146,6 @@ def test_openai_cannot_be_reintroduced_as_test_destination(tmp_path, monkeypatch
 
 
 def test_unauthenticated_codex_run_refuses_without_starting_login(monkeypatch):
-    monkeypatch.setattr('aictrl.runtime.supervisor.codex_authenticated', lambda image: False)
+    monkeypatch.setattr('aictrl.runtime.supervisor.resolve_agent', lambda name: replace(resolve_agent(name), authenticated=lambda image: False))
     with pytest.raises(AuthenticationCheckError, match='make codex-login'):
         run_agent('codex', PROJECT_ROOT / 'demo/project')

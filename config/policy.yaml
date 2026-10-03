@@ -1,12 +1,24 @@
-schema_version: 1
-policy_version: t03
+schema_version: 2
+policy_version: t05h
 default_action: BLOCK
 agents:
   claude:
     enabled: true
+    rules:
+      - id: claude.native-messages
+        channel: LLM
+        direction: OUTBOUND
+        protocol: ANTHROPIC_MESSAGES
+        target: anthropic
+        operations: [messages, count_tokens]
+        action: ALLOW
   codex:
     enabled: true
-llm:
-  messages: ALLOW
-  count_tokens: ALLOW
-  responses: ALLOW
+    rules:
+      - id: codex.native-responses
+        channel: LLM
+        direction: OUTBOUND
+        protocol: RESPONSES
+        target: openai
+        operations: [responses]
+        action: ALLOW

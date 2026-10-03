@@ -17,7 +17,8 @@ from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from aictrl.adapters.base import AgentConfig, RoutingMode
+from aictrl.adapters.base import RoutingMode
+from aictrl.adapters.claude import ClaudeAdapter
 from aictrl.contracts import SessionState
 from aictrl.runtime.config import TestDestination, load_config
 from aictrl.runtime.docker import RuntimeFailure, docker
@@ -36,10 +37,9 @@ def settings_and_agent(volume, target_ip, seconds=90):
     settings.runtime.routing_mode = RoutingMode.EGRESS_ONLY
     settings.runtime.test_destinations = (TestDestination(host='allowed.test', port=8081, connect_ip=target_ip),)
     settings.limits.wall_time_seconds = seconds
-    agent = AgentConfig(adapter='claude', image_ref=settings.claude.image, entry_command=('claude',),
-                        persistent_state_volume=volume, state_mount='/home/dev/.claude',
-                        environment={'HTTP_PROXY': 'http://proxy:8080', 'HTTPS_PROXY': 'http://proxy:8080',
-                                     'NO_PROXY': 'localhost,127.0.0.1', 'CLAUDE_CONFIG_DIR': '/home/dev/.claude'})
+    agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY)
+    agent.persistent_state_volume = volume
+    agent.required_provider_endpoints = ()
     assert settings.runtime.routing_mode == RoutingMode.EGRESS_ONLY
     return settings, agent
 

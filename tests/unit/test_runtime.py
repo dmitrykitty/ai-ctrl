@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from datetime import datetime, timezone
 import time
@@ -12,6 +13,7 @@ from aictrl.runtime.auth import AuthenticationCheckError
 from aictrl.runtime.compose import render_compose
 from aictrl.runtime.config import TestDestination as Destination, load_config
 from aictrl.runtime.docker import RuntimeFailure
+from aictrl.runtime.registry import resolve_agent
 from aictrl.runtime.supervisor import RuntimeSupervisor, run_claude
 from aictrl.runtime.workspace import PROJECT_ROOT, validate_workspace
 
@@ -96,8 +98,8 @@ def test_rendered_topology_separates_state_ca_network_and_resource_limits(tmp_pa
     assert (native['cpus'], native['mem_limit'], native['pids_limit']) == (2, '2048m', 256)
     assert len(native['volumes']) == 3
     assert native['volumes'][0]['source'] == str(tmp_path / 'workspace')
-    assert native['volumes'][1:] == ['claude-state:/home/dev/.claude', 'proxy-public-ca:/etc/aictrl:ro']
-    assert topology['volumes']['claude-state'] == {'external': True, 'name': 'aictrl-claude-state'}
+    assert native['volumes'][1:] == ['provider-state:/home/dev/.claude', 'proxy-public-ca:/etc/aictrl:ro']
+    assert topology['volumes']['provider-state'] == {'external': True, 'name': 'aictrl-claude-state'}
     assert 'proxy-private-ca:/home/mitmproxy/.mitmproxy' in proxy['volumes']
     assert proxy['read_only'] and proxy['cap_drop'] == ['ALL']
     assert native['labels']['io.aictrl.session'] == 'synthetic-session'
@@ -110,21 +112,21 @@ def test_missing_or_uncheckable_auth_never_creates_runtime(monkeypatch, tmp_path
         if authenticated == 'error':
             raise AuthenticationCheckError('safe operational error')
         return False
-    monkeypatch.setattr('aictrl.runtime.supervisor.claude_authenticated', auth)
+    monkeypatch.setattr('aictrl.runtime.supervisor.resolve_agent', lambda name: replace(resolve_agent(name), authenticated=auth))
     monkeypatch.setattr('aictrl.runtime.supervisor.RuntimeSupervisor', lambda *a, **kw: pytest.fail('preflight started runtime'))
     with pytest.raises(AuthenticationCheckError, match='make claude-login' if authenticated is False else 'operational'):
         run_claude(tmp_path)
 
 
 def test_timeout_cannot_extend_configured_limit(monkeypatch, tmp_path):
-    monkeypatch.setattr('aictrl.runtime.supervisor.claude_authenticated', lambda *a: pytest.fail('invalid timeout reached auth'))
+    monkeypatch.setattr('aictrl.runtime.supervisor.resolve_agent', lambda *a: pytest.fail('invalid timeout reached registry'))
     with pytest.raises(ValueError, match='configured wall-clock'):
         run_claude(tmp_path, timeout=601)
 
 
 def test_deadline_during_preparation_is_terminal_and_cleans_host_metadata(tmp_path):
     settings = load_config(PROJECT_ROOT)
-    agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(session(token=None))
+    agent = ClaudeAdapter(settings.claude.image, settings.runtime.routing_mode)
     runtime = RuntimeSupervisor(tmp_path, settings, agent)
     directory = Path(runtime.directory.name)
     runtime._deadline = time.monotonic() - 1
@@ -138,7 +140,7 @@ def test_preparation_failure_cleans_host_metadata_and_restores_signal_handlers(m
     import signal
     before = signal.getsignal(signal.SIGINT)
     settings = load_config(PROJECT_ROOT)
-    agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(session(token=None))
+    agent = ClaudeAdapter(settings.claude.image, settings.runtime.routing_mode)
     runtime = RuntimeSupervisor(tmp_path, settings, agent)
     directory = Path(runtime.directory.name)
     monkeypatch.setattr(runtime, 'prepare', lambda: (_ for _ in ()).throw(RuntimeFailure('synthetic failure')))
@@ -152,7 +154,7 @@ def test_preparation_failure_cleans_host_metadata_and_restores_signal_handlers(m
 def test_timed_out_lock_creation_removes_only_its_own_reservation(monkeypatch, tmp_path):
     import subprocess
     settings = load_config(PROJECT_ROOT)
-    agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(session())
+    agent = ClaudeAdapter(settings.claude.image, settings.runtime.routing_mode)
     runtime = RuntimeSupervisor(tmp_path, settings, agent)
     removed = []
 

@@ -7,10 +7,7 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from aictrl.contracts import SecurityEvent
-
-
-class StoreFailure(RuntimeError):
-    pass
+from aictrl.reporting.sink import StoreFailure
 
 
 class EventStore:
