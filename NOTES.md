@@ -1,6 +1,29 @@
 # Implementation notes
 
-T04 STATUS: PASS. T01–T04 are COMPLETE. T05 is next; stop here and do not start it without its instruction. T04 adds proof orchestration only. The production supervisor, Compose topology, adapter, gateway, policy, store, firewall, proxy, dependency lock and image identities are unchanged; shared contracts remain schema 1.
+## T05 checkpoint — paused by user on 2026-10-03
+
+T05 is IN_PROGRESS, not qualified or complete. User requested a break and continuation in about half an hour. Stop after T05; T06 is not authorized. Active implementation elapsed approximately 11 minutes (17:52:39–18:03:44 UTC); exclude the user-requested break from the 45–60 minute implementation timebox.
+
+Implemented but still awaiting Docker/live qualification: CodexAdapter; narrow shared-supervisor selection of RESPONSES identity, isolated provider state and independent lease; dedicated native authentication/status commands; fixed-origin POST /codex/responses gateway sharing durable admission/raw SSE transport; minimal default-BLOCK Responses policy; targeted tests. Public provider profile is /home/dev/.codex/aictrl.config.toml, selected with --profile aictrl. Internal identity is env_http_headers X-AICtrl-Session / AICTRL_SESSION_TOKEN; no session secret in profile. ChatGPT-only saved authentication is required; no platform API key or host state is copied.
+
+Official Codex 0.159.3 and its bwrap helper were downloaded from the pinned OpenAI release with GitHub-published SHA-256 digests verified. Image aictrl-codex:0.159.3-t05 was built on the unchanged qualified base. Root-owned binary and Apache-2.0 license retained; actual image --version/--help/login --help/exec --help verified. Existing Claude and proxy images were not rebuilt. Gateway code changed but aictrl-gateway:t05 has NOT been built yet; current project config selects that pending image.
+
+Fresh aictrl-codex-state reported not authenticated using native offline login status, read-only provider volume and network none. Restricted native codex --no-daemon login --device-auth successfully produced its browser flow through an auth.openai.com-only CONNECT proxy. It was cancelled at the user-requested break; do not retain or reuse the expired one-time device code. No credentials were inspected, printed, copied or logged. Provider state volume is preserved. Authentication has NOT completed; next run should generate a fresh flow with make codex-login.
+
+Targeted shared-runtime/config/CLI/policy/auth boundary tests: 67 passed. Targeted Codex/Responses/Claude-gateway/policy group: 65 passed and one test assertion failed (incorrect suffix length in new command assertion); fixed and that one test rerun passed. Thus all 66 selected cases have passed, without repeating the whole group. No final full suite or live provider request has run for T05.
+
+Resume at this checkpoint:
+1. Start make codex-login and let the user finish the fresh device flow; continue independent qualification while waiting. Verify offline status, recreated-container persistence and idempotent make codex-login, without reading any credential file.
+2. Build only the changed gateway image with make gateway-image. Add/run focused real Docker probes for Codex state/mounts/UID/GID/capabilities, default-deny/direct/proxy denial, lease concurrency, cleanup and synthetic native Responses streaming/tool follow-up. Synthetic transport remains test-only and does not become an upstream override in production.
+3. Run the exact live .venv/bin/aictrl run codex demo/project --prompt 'Reply with exactly: AICTRL_CODEX_OK' once. The requested trusted upstream is https://api.openai.com/v1; the architecture originally names ChatGPT's Codex backend. Native subscription token compatibility with this fixed API origin still needs actual verification. Never work around failure using a platform API key, copied host state or generic inference bypass. Document a reproducible technical blocker if reached and respect the remaining timebox.
+4. If inexpensive and basic inference passes, qualify a native local-tool/follow-up turn. Shared Claude admission/policy tests passed; run one bounded live Claude regression only if needed for the shared changed handler.
+5. Run one final offline suite; update all required milestone/reuse/architecture documentation; make logical commits/push, report the required T05 result format and stop before T06.
+
+Known unqualified areas: actual pinned-client custom profile parsing/network path, native Responses body encoding, API-origin compatibility with native ChatGPT login, live response, native local-tool loop, and actual Codex Docker lifecycle. New client print mode suppresses native stderr because Codex otherwise prints the full input there; safe failure/exit and session events remain available. No shared contract/schema/dependency change.
+
+Official sources checked: [authentication and custom-provider OpenAI auth](https://learn.chatgpt.com/docs/auth), [configuration fields and HTTP/SSE transport](https://learn.chatgpt.com/docs/config-file/config-reference), [SIWC app-server API configuration](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server). SIWC is a distinct token-sharing integration and does not prove native Codex login tokens work at the requested API origin.
+
+Historical T04 STATUS: PASS. T01–T04 were COMPLETE at this checkpoint. T04 adds proof orchestration only. The production supervisor, Compose topology, adapter, gateway, policy, store, firewall, proxy, dependency lock and image identities are unchanged; shared contracts remain schema 1.
 
 ## T04 verified on 2026-10-03
 

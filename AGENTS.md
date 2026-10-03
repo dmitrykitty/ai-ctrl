@@ -1,6 +1,6 @@
 # AI Control Layer
 
-Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T04 are complete. T03 native subscription forwarding and T04 repeatable integration proof are verified. T05 is next; stop after T04 and do not start T05 without its instruction.
+Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T04 are complete. T03 native subscription forwarding and T04 repeatable integration proof are verified. T05 Codex integration is authorized within a 45–60 minute timebox. Paused by user after approximately 11 active minutes; resume from the T05 checkpoint in NOTES.md after the user returns. Stop after T05; do not start T06.
 
 ## Goal and architecture
 
