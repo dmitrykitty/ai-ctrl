@@ -4,6 +4,9 @@ default_action: BLOCK
 agents:
   claude:
     enabled: true
+  codex:
+    enabled: true
 llm:
   messages: ALLOW
   count_tokens: ALLOW
+  responses: ALLOW

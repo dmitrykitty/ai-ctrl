@@ -15,8 +15,10 @@ from pydantic import SecretStr
 
 from aictrl.adapters.base import AgentConfig, EndpointPurpose, RoutingMode
 from aictrl.adapters.claude import ClaudeAdapter
+from aictrl.adapters.codex import CodexAdapter
 from aictrl.contracts import AgentSession, SessionState
 from aictrl.runtime.auth import AUTH_CONTAINER, CLAUDE_STATE, AuthenticationCheckError, claude_authenticated
+from aictrl.runtime.codex_auth import CODEX_AUTH_CONTAINER, CODEX_STATE, codex_authenticated
 from aictrl.runtime.compose import render_compose
 from aictrl.runtime.config import ProjectConfig, load_config
 from aictrl.runtime.docker import RuntimeDeadline, RuntimeFailure, docker, free_subnet
@@ -42,13 +44,20 @@ class RuntimeSupervisor:
         if not self.uid or not self.gid:
             raise RuntimeFailure('Run the host supervisor as a non-root user.')
         now = datetime.now(timezone.utc)
+        adapters = {'claude': (ClaudeAdapter, 'ANTHROPIC_MESSAGES', '/home/dev/.claude'),
+                    'codex': (CodexAdapter, 'RESPONSES', '/home/dev/.codex')}
+        if agent.adapter not in adapters:
+            raise RuntimeFailure('Unsupported runtime adapter.')
+        adapter_type, protocol, state_mount = adapters[agent.adapter]
+        if agent.state_mount != state_mount:
+            raise RuntimeFailure('A dedicated matching provider state path is required.')
         identity = AgentSession(agent_id=agent.adapter, adapter=agent.adapter, user_id=f'uid-{self.uid}',
-                                profile_id='local', workspace=str(self.workspace), protocol='ANTHROPIC_MESSAGES',
+                                profile_id='local', workspace=str(self.workspace), protocol=protocol,
                                 billing_mode='SUBSCRIPTION', started_at=now)
         self.gateway_mode = settings.runtime.routing_mode == RoutingMode.APPLICATION_GATEWAY
         if self.gateway_mode:
             identity.session_token = SecretStr(secrets.token_urlsafe(48))
-            rendered = ClaudeAdapter(agent.image_ref, RoutingMode.APPLICATION_GATEWAY).render_config(identity)
+            rendered = adapter_type(agent.image_ref, RoutingMode.APPLICATION_GATEWAY).render_config(identity)
             self.agent = agent.model_copy(update={'environment': dict(agent.environment) | rendered.environment})
         self.identifier = identity.session_id.hex
         self.session = ManagedSession(identity, 'aictrl-' + self.identifier + '-agent', now + timedelta(seconds=settings.limits.wall_time_seconds))
@@ -84,10 +93,10 @@ class RuntimeSupervisor:
 
     def prepare(self) -> None:
         volume = self.agent.persistent_state_volume
-        if not volume or self.agent.state_mount != '/home/dev/.claude':
-            raise RuntimeFailure('A dedicated Claude state volume is required.')
+        if not volume:
+            raise RuntimeFailure('A dedicated provider state volume is required.')
         if self._docker(['ps', '--filter', 'volume=' + volume, '--format', '{{.ID}}']).stdout.strip():
-            raise RuntimeFailure('Claude state is already in use by another container.')
+            raise RuntimeFailure('Provider state is already in use by another container.')
         self._docker(['version', '--format', '{{.Server.Version}}'])
         self._docker(['image', 'inspect', self.agent.image_ref, '--format', '{{.Id}}'])
         self._docker(['image', 'inspect', self.settings.runtime.proxy_image, '--format', '{{.Id}}'])
@@ -102,13 +111,13 @@ class RuntimeSupervisor:
             audit.chmod(0o700)
         # Reserve the same engine-level name used by authentication operations.
         # This stopped container holds no mounts and prevents concurrent state use.
-        lock_name = AUTH_CONTAINER if volume == CLAUDE_STATE else 'aictrl-' + self.identifier + '-state-lock'
+        lock_name = {CLAUDE_STATE: AUTH_CONTAINER, CODEX_STATE: CODEX_AUTH_CONTAINER}.get(volume, 'aictrl-' + self.identifier + '-state-lock')
         self.lock_name = lock_name
         self.lock_id = self._docker(['create', '--name', lock_name, '--label', 'io.aictrl.session=' + self.identifier,
                                '--label', 'io.aictrl.managed=true', '--network', 'none', '--cap-drop', 'ALL',
                                '--read-only', '--entrypoint', '/bin/true', self.agent.image_ref]).stdout.strip()
         if self._docker(['ps', '--filter', 'volume=' + volume, '--format', '{{.ID}}']).stdout.strip():
-            raise RuntimeFailure('Claude state became busy; refusing concurrent use.')
+            raise RuntimeFailure('Provider state became busy; refusing concurrent use.')
         subnet = free_subnet(self._docker)
         self.proxy_ip = str(subnet[2])
         self.internal_network = 'aictrl-' + self.identifier + '_agent-internal'
@@ -270,23 +279,46 @@ class RuntimeSupervisor:
             raise RuntimeFailure(f'Cleanup failed for managed session {self.identifier}.') from None
 
 
-def run_claude(workspace: Path, project: Path = PROJECT_ROOT, *, prompt: str | None = None,
-               timeout: int | None = None) -> int:
+def run_agent(name: str, workspace: Path, project: Path = PROJECT_ROOT, *, prompt: str | None = None,
+              timeout: int | None = None) -> int:
     selected = validate_workspace(workspace, project)
     settings = load_config(project)
     if timeout is not None:
         if not 1 <= timeout <= settings.limits.wall_time_seconds:
             raise ValueError('Timeout must be positive and no larger than the configured wall-clock limit.')
         settings = settings.model_copy(update={'limits': settings.limits.model_copy(update={'wall_time_seconds': timeout})})
-    if not claude_authenticated(settings.claude.image):
-        raise AuthenticationCheckError('Claude is not authenticated.\nRun:\n    make claude-login')
-    identity = AgentSession(agent_id='claude', adapter='claude', user_id=f'uid-{os.getuid()}', profile_id='local',
-                            workspace=str(selected), protocol='ANTHROPIC_MESSAGES', billing_mode='SUBSCRIPTION',
+    if name == 'claude':
+        provider, adapter_type, authenticated, protocol = settings.claude, ClaudeAdapter, claude_authenticated, 'ANTHROPIC_MESSAGES'
+    elif name == 'codex' and settings.codex is not None:
+        provider, adapter_type, authenticated, protocol = settings.codex, CodexAdapter, codex_authenticated, 'RESPONSES'
+        if settings.runtime.routing_mode != RoutingMode.APPLICATION_GATEWAY:
+            raise RuntimeFailure('Codex requires APPLICATION_GATEWAY routing.')
+    else:
+        raise ValueError('Unsupported or unconfigured agent.')
+    if not authenticated(provider.image):
+        raise AuthenticationCheckError(f'{name.capitalize()} is not authenticated.\nRun:\n    make {name}-login')
+    identity = AgentSession(agent_id=name, adapter=name, user_id=f'uid-{os.getuid()}', profile_id='local',
+                            workspace=str(selected), protocol=protocol, billing_mode='SUBSCRIPTION',
                             started_at=datetime.now(timezone.utc))
-    agent = ClaudeAdapter(settings.claude.image, RoutingMode.EGRESS_ONLY).render_config(identity)
+    adapter = adapter_type(provider.image, RoutingMode.EGRESS_ONLY)
+    agent = adapter.render_config(identity)
     runtime = RuntimeSupervisor(selected, settings, agent, project, interactive=prompt is None and sys.stdin.isatty() and sys.stdout.isatty())
-    command = ('claude', '--print', '--output-format', 'text') if prompt is not None else agent.entry_command
-    coverage = 'structured Anthropic admission' if runtime.gateway_mode else 'HTTPS destination enforcement'
+    command = agent.entry_command
+    if prompt is not None:
+        if name == 'claude':
+            command = ('claude', '--print', '--output-format', 'text')
+        else:
+            # Native exec prints its complete input on stderr. Keep diagnostics
+            # ephemeral and return only its final answer and exit status.
+            command = ('bash', '-c', 'exec "$@" 2>/dev/null', 'aictrl-codex-exec', *adapter.exec_command())
+    coverage = f'structured {protocol} admission' if runtime.gateway_mode else 'HTTPS destination enforcement'
     print(f'AICTRL session {runtime.identifier}: {settings.runtime.routing_mode}, {coverage}, UID/GID {runtime.uid}:{runtime.gid}', flush=True)
     result, _ = runtime.run(command, input_text=prompt)
+    if result and name == 'codex':
+        print('Codex exited unsuccessfully; inspect safe session events for gateway admission.', file=sys.stderr)
     return result
+
+
+def run_claude(workspace: Path, project: Path = PROJECT_ROOT, *, prompt: str | None = None,
+               timeout: int | None = None) -> int:
+    return run_agent('claude', workspace, project, prompt=prompt, timeout=timeout)

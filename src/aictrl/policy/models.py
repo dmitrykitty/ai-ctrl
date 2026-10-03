@@ -18,6 +18,7 @@ class AgentPolicy(PolicyModel):
 class LLMPolicy(PolicyModel):
     messages: Literal['ALLOW', 'BLOCK'] = 'BLOCK'
     count_tokens: Literal['ALLOW', 'BLOCK'] = 'BLOCK'
+    responses: Literal['ALLOW', 'BLOCK'] = 'BLOCK'
 
 
 class Policy(PolicyModel):

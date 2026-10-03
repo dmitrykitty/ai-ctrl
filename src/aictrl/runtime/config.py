@@ -20,6 +20,13 @@ class ClaudeRuntime(StrictConfig):
     auth_mode: Literal["subscription"]
 
 
+class CodexRuntime(StrictConfig):
+    image: str = Field(min_length=1)
+    state_volume: Literal['aictrl-codex-state']
+    state_mount: Literal['/home/dev/.codex']
+    auth_mode: Literal['subscription']
+
+
 class RuntimeLimits(StrictConfig):
     cpus: float = Field(gt=0, allow_inf_nan=False)
     memory_mb: int = Field(gt=0)
@@ -61,8 +68,9 @@ class GatewayRuntime(StrictConfig):
 
 class ProjectConfig(StrictConfig):
     schema_version: Literal[1]
-    milestone: Literal["T01", "T02", "T03"]
+    milestone: Literal["T01", "T02", "T03", "T04", "T05"]
     claude: ClaudeRuntime
+    codex: CodexRuntime | None = None
     limits: RuntimeLimits
     runtime: RuntimeEgress = Field(default_factory=RuntimeEgress)
     gateway: GatewayRuntime = Field(default_factory=GatewayRuntime)

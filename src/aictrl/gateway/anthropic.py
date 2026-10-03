@@ -26,6 +26,17 @@ class GatewayStreamFailure(RuntimeError):
 
 
 class AnthropicGateway:
+    protocol = 'ANTHROPIC_MESSAGES'
+    target = 'anthropic'
+    paths = PATHS
+    upstream_paths = {'messages': UPSTREAM + '/v1/messages',
+                      'count_tokens': UPSTREAM + '/v1/messages/count_tokens'}
+    provider_headers = staticmethod(request_headers)
+
+    @staticmethod
+    def valid_payload(payload: object) -> bool:
+        return isinstance(payload, dict) and isinstance(payload.get('messages'), list)
+
     def __init__(self, session: GatewaySession, engine: PolicyEngine, store: EventStore,
                  client: httpx.AsyncClient) -> None:
         self.session, self.engine, self.store, self.client = session, engine, store, client
@@ -55,10 +66,10 @@ class AnthropicGateway:
         return self.error(request, status, 'AICTRL request blocked.')
 
     async def handle(self, incoming: Request):
-        operation = PATHS.get(incoming.url.path, 'unsupported') if incoming.method == 'POST' else 'unsupported'
+        operation = self.paths.get(incoming.url.path, 'unsupported') if incoming.method == 'POST' else 'unsupported'
         control = ControlRequest(session_id=self.session.session_id, channel='LLM', direction='OUTBOUND',
-                                 protocol='ANTHROPIC_MESSAGES', inspection_level='STRUCTURED',
-                                 target_id='anthropic', operation_id=operation, created_at=datetime.now(timezone.utc))
+                                 protocol=self.protocol, inspection_level='STRUCTURED',
+                                 target_id=self.target, operation_id=operation, created_at=datetime.now(timezone.utc))
         if not self.session.accepts(incoming.headers.getlist('x-aictrl-session')):
             return await self.block(control, 'llm.invalid_session', 401)
         context = PolicyContext(session_id=self.session.session_id, agent_id=self.session.agent_id,
@@ -77,7 +88,7 @@ class AnthropicGateway:
                 if len(body) > MAX_BODY:
                     return await self.block(control, 'llm.body_too_large', 413)
             payload = json.loads(body)
-            if not isinstance(payload, dict) or not isinstance(payload.get('messages'), list):
+            if not self.valid_payload(payload):
                 raise ValueError('Invalid native body')
         except (ValueError, UnicodeError):
             return await self.block(control, 'llm.invalid_body', 400)
@@ -86,9 +97,9 @@ class AnthropicGateway:
         except StoreFailure:
             return self.error(control, 503, 'AICTRL admission audit unavailable.')
         # Origin and path are trusted constants. The caller's query is data only.
-        url = httpx.URL(UPSTREAM + '/v1/messages' + ('/count_tokens' if operation == 'count_tokens' else '')).copy_with(query=incoming.scope['query_string'])
+        url = httpx.URL(self.upstream_paths[operation]).copy_with(query=incoming.scope['query_string'])
         try:
-            outbound = self.client.build_request('POST', url, content=bytes(body), headers=request_headers(incoming.headers.raw))
+            outbound = self.client.build_request('POST', url, content=bytes(body), headers=self.provider_headers(incoming.headers.raw))
             for name in HOP_BY_HOP:
                 outbound.headers.pop(name.decode(), None)
             upstream = await self.client.send(outbound, stream=True, follow_redirects=False)

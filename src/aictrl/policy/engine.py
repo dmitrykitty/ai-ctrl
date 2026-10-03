@@ -8,15 +8,24 @@ class PolicyEngine:
 
     def decide(self, context: PolicyContext, request: ControlRequest) -> ControlDecision:
         agent = self.policy.agents.get(context.agent_id)
+        provider_operation = (
+            context.agent_id == 'claude'
+            and request.protocol == AgentProtocol.ANTHROPIC_MESSAGES
+            and request.target_id == 'anthropic'
+            and request.operation_id in ('messages', 'count_tokens')
+        ) or (
+            context.agent_id == 'codex'
+            and request.protocol == AgentProtocol.RESPONSES
+            and request.target_id == 'openai'
+            and request.operation_id == 'responses'
+        )
         allowed = (
             context.session_id == request.session_id
             and context.policy_version == self.policy.policy_version
             and agent is not None and agent.enabled
             and request.channel == Channel.LLM and request.direction == Direction.OUTBOUND
-            and request.protocol == AgentProtocol.ANTHROPIC_MESSAGES
             and request.inspection_level == InspectionLevel.STRUCTURED
-            and request.target_id == 'anthropic'
-            and request.operation_id in ('messages', 'count_tokens')
+            and provider_operation
             and getattr(self.policy.llm, request.operation_id, 'BLOCK') == 'ALLOW'
         )
         return ControlDecision(request_id=request.request_id,

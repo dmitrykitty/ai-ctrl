@@ -14,5 +14,5 @@ context = Path(sys.argv[1])
 shutil.copytree('src', context / 'src', ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
 shutil.copyfile('docker/gateway/Dockerfile', context / 'Dockerfile')
 PY
-docker build --tag aictrl-gateway:t03 "$task_context"
-python3 scripts/record-image.py gateway aictrl-gateway:t03
+docker build --tag aictrl-gateway:t05 "$task_context"
+python3 scripts/record-image.py gateway aictrl-gateway:t05

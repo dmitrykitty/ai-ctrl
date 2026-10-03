@@ -64,7 +64,15 @@ def render_compose(project: Path, directory: Path, workspace: Path, settings: Pr
     if test_upstream_network is not None:
         # Deterministic Docker probes attach a synthetic backend to this network.
         topology['networks']['upstream'] = {'external': True, 'name': test_upstream_network}
-    topology['volumes']['claude-state']['name'] = agent.persistent_state_volume
+    if agent.adapter == 'codex':
+        topology['volumes']['codex-state'] = topology['volumes'].pop('claude-state')
+        container['volumes'][1] = 'codex-state:/home/dev/.codex'
+        state_key = 'codex-state'
+    elif agent.adapter == 'claude' and agent.state_mount == '/home/dev/.claude':
+        state_key = 'claude-state'
+    else:
+        raise ValueError('Unsupported provider state mapping.')
+    topology['volumes'][state_key]['name'] = agent.persistent_state_volume
     for name in ('proxy-private-ca', 'proxy-public-ca'):
         topology['volumes'][name]['labels'] = labels
     return topology

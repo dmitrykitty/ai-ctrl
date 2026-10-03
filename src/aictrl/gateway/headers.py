@@ -25,3 +25,14 @@ def response_headers(headers: list[tuple[bytes, bytes]]) -> list[tuple[bytes, by
     blocked = strip_set(headers)
     return [(name, value) for name, value in headers
             if name.lower() not in blocked and not name.lower().startswith(b'x-aictrl-')]
+
+
+def codex_request_headers(headers: list[tuple[bytes, bytes]]) -> list[tuple[bytes, bytes]]:
+    blocked = strip_set(headers) | {b'host', b'content-length'}
+    allowed = {b'authorization', b'content-type', b'accept', b'accept-encoding',
+               b'user-agent', b'chatgpt-account-id', b'originator', b'session_id',
+               b'x-request-id'}
+    prefixes = (b'openai-', b'x-openai-', b'x-stainless-', b'x-codex-', b'x-oai-', b'x-client-')
+    return [(name, value) for name, value in headers
+            if name.lower() not in blocked and not name.lower().startswith(b'x-aictrl-')
+            and (name.lower() in allowed or name.lower().startswith(prefixes))]

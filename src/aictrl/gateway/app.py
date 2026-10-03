@@ -6,6 +6,7 @@ import httpx
 from fastapi import FastAPI, Request
 
 from aictrl.gateway.anthropic import AnthropicGateway
+from aictrl.gateway.responses import ResponsesGateway
 from aictrl.gateway.session import GatewaySession, load_session
 from aictrl.policy.engine import PolicyEngine
 from aictrl.policy.loader import load_policy
@@ -15,13 +16,16 @@ from aictrl.reporting.store import EventStore
 
 def create_app(session: GatewaySession, policy: Policy, store: EventStore,
                client: httpx.AsyncClient | None = None) -> FastAPI:
+    handlers = {'claude': AnthropicGateway, 'codex': ResponsesGateway}
+    if session.adapter not in handlers or session.agent_id != session.adapter:
+        raise ValueError('Unsupported gateway agent identity.')
     @asynccontextmanager
     async def lifespan(app):
         owned = client is None
         upstream = client or httpx.AsyncClient(trust_env=False,
                          timeout=httpx.Timeout(connect=10, read=310, write=30, pool=10),
                          limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))
-        app.state.gateway = AnthropicGateway(session, PolicyEngine(policy), store, upstream)
+        app.state.gateway = handlers[session.adapter](session, PolicyEngine(policy), store, upstream)
         try:
             yield
         finally:
