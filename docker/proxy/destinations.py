@@ -11,8 +11,8 @@ from pathlib import Path
 class DestinationList:
     def __init__(self, records: list[dict]) -> None:
         self.destinations: dict[tuple[str, int], str | None] = {}
-        if not records:
-            raise ValueError("Empty runtime destination list")
+        # A stateless MCP-only agent has no external destinations. An empty
+        # allowlist is a valid deny-all policy; address() rejects before DNS.
         for record in records:
             if set(record) - {"host", "port", "connect_ip"}:
                 raise ValueError("Unknown runtime destination field")

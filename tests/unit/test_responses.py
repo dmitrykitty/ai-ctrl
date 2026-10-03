@@ -15,6 +15,7 @@ from test_gateway import Frames, TOKEN, PROVIDER, PROMPT
 FRAMES = [b'event: response.created\ndata: {"type":"response.created"}\n\n',
           b'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"type":"function_call","call_id":"call_1"}}\n\n',
           b'event: response.function_call_arguments.delta\ndata: {"type":"response.function_call_arguments.delta","delta":"{\\"cmd\\":\\"pwd\\"}"}\n\n',
+          b'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_1","arguments":"{\\"cmd\\":\\"pwd\\"}"}}\n\n',
           b'event: response.completed\ndata: {"type":"response.completed","response":{"usage":{"input_tokens":7,"output_tokens":3}}}\n\n']
 BODY = json.dumps({'model':'native-model','instructions':PROMPT,'input':[{'role':'user','content':PROMPT}],
                    'tools':[{'type':'function','name':'exec_command','parameters':{'type':'object'}}],
@@ -24,7 +25,7 @@ BODY = json.dumps({'model':'native-model','instructions':PROMPT,'input':[{'role'
 def fixture(tmp_path, *, enabled=True, action='ALLOW', status=200, store_error=False):
     session = GatewaySession(session_id=uuid4(), agent_id='codex', adapter='codex', protocol='RESPONSES', user_id='local', profile_id='default',
                              expires_at=datetime.now(timezone.utc)+timedelta(minutes=5),session_token=TOKEN)
-    policy = Policy(schema_version=2, policy_version='t05', default_action='BLOCK',
+    policy = Policy(schema_version=3, policy_version='t05', default_action='BLOCK',
                     agents={'codex': AgentPolicy(enabled=enabled, rules=(AdmissionRule(
                         id='native.responses', channel='LLM', direction='OUTBOUND', protocol='RESPONSES',
                         target='openai', operations=('responses',), action=action),))})
@@ -40,7 +41,8 @@ def fixture(tmp_path, *, enabled=True, action='ALLOW', status=200, store_error=F
               'x-request-id':'provider-request','x-ratelimit-remaining-requests':'7','retry-after':'3',
               'connection':'keep-alive, x-hop','x-hop':'remove','x-aictrl-session':'strip'})
     client = httpx.AsyncClient(transport=httpx.MockTransport(upstream),trust_env=False)
-    return create_app(session,policy,store,client),session,store,calls,client
+    from guard_fakes import FakeSemanticProvider
+    return create_app(session,policy,store,client,semantic_provider=FakeSemanticProvider()),session,store,calls,client
 
 
 async def invoke(app, *, path='/codex/responses?x=a%2Fb&future=true', method='POST', token=TOKEN, body=BODY):

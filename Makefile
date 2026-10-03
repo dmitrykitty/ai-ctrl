@@ -3,6 +3,19 @@
 .PHONY: benchmark-gateway
 .DEFAULT_GOAL := bootstrap
 
+.PHONY: demo-image verify-demo-boundary benchmark-guards verify-jev
+demo-image:
+	bash ./scripts/demo-image.sh
+
+verify-demo-boundary:
+	./scripts/uv.sh run --frozen python scripts/verify-demo-boundary.py
+
+benchmark-guards:
+	./scripts/uv.sh run --frozen python scripts/benchmark-guards.py
+
+verify-jev:
+	./scripts/uv.sh run --frozen python scripts/verify-jev.py
+
 benchmark-gateway:
 	./scripts/uv.sh run --frozen python scripts/benchmark-gateway.py --output .aictrl/benchmarks/latest.json
 
@@ -24,7 +37,7 @@ codex-login:
 bootstrap:
 	./scripts/bootstrap.sh
 
-# Local semantic models and dashboard assets come in T09.
+# Dashboard/demo preparation comes in T09; T06 uses external Jev.
 prepare: bootstrap runtime-image proxy-image gateway-image
 
 test:

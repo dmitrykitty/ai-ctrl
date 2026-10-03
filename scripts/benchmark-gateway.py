@@ -50,7 +50,7 @@ def percentiles(samples_ns: list[int]) -> dict[str, float]:
 def benchmark_policy() -> Policy:
     rule = AdmissionRule(id='benchmark.messages', channel='LLM', direction='OUTBOUND', protocol='ANTHROPIC_MESSAGES',
                          target='anthropic', operations=('messages',), action='ALLOW')
-    return Policy(schema_version=2, policy_version='local-benchmark', default_action='BLOCK',
+    return Policy(schema_version=3, policy_version='local-benchmark', default_action='BLOCK',
                   agents={'benchmark-agent': AgentPolicy(enabled=True, rules=(rule,))})
 
 

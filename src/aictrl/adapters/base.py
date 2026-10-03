@@ -29,6 +29,7 @@ class AgentConfig(Contract):
     entry_command: tuple[str, ...]
     persistent_state_volume: str | None = None
     state_mount: str | None = None
+    stateless: bool = False
     # Internal identity can appear here. Exclude all environment from exports/repr.
     environment: dict[str, str] = Field(default_factory=dict, exclude=True, repr=False)
     required_provider_endpoints: tuple[ProviderEndpoint, ...] = ()

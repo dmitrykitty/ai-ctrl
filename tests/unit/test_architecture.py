@@ -61,7 +61,7 @@ class ThirdAdapter:
 def third_policy():
     rule = AdmissionRule(id='third.responses', channel='LLM', direction='OUTBOUND', protocol='RESPONSES',
                          target='openai', operations=('responses',), action='ALLOW')
-    return Policy(schema_version=2, policy_version='synthetic-extension', default_action='BLOCK',
+    return Policy(schema_version=3, policy_version='synthetic-extension', default_action='BLOCK',
                   agents={'synthetic-third': AgentPolicy(enabled=True, rules=(rule,))})
 
 
@@ -121,7 +121,7 @@ def test_trusted_third_adapter_uses_one_identity_config_and_existing_pipeline(tm
                     assert request.url.path == '/backend-api/codex/responses' and request.url.query == b''
                     assert 'x-aictrl-session' not in request.headers
                     calls.append(request)
-                    return httpx.Response(200, stream=Frames(FRAMES))
+                    return httpx.Response(200, stream=Frames(FRAMES), headers={'content-type':'text/event-stream'})
                 async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
                     app = create_app(trusted, third_policy(), store, client)
                     async with app.router.lifespan_context(app):
@@ -214,7 +214,7 @@ def test_non_sqlite_sink_controls_admission_and_completion(tmp_path):
     async def upstream(request):
         assert [event.action for event in sink.events] == ['ALLOW']
         calls.append(request)
-        return httpx.Response(200, stream=Frames())
+        return httpx.Response(200, stream=Frames(), headers={'content-type':'text/event-stream'})
     async def proof():
         async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
             app = create_app(session, native_policy(), sink, client)

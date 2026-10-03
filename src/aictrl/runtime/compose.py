@@ -9,12 +9,16 @@ from aictrl.adapters.base import AgentConfig, RoutingMode
 from aictrl.runtime.config import ProjectConfig
 
 
-def validate_provider_state(volume: str | None, mount: str | None) -> None:
+def validate_provider_state(volume: str | None, mount: str | None, *, stateless: bool = False) -> None:
     """Accept a named volume and one provider home from trusted adapter code.
 
     This is not a host bind/path selector. No traversal, wildcard, nested
     symlink path or Docker mount syntax can pass this boundary.
     """
+    if stateless:
+        if volume is not None or mount is not None:
+            raise ValueError('Stateless adapters cannot select provider mounts.')
+        return
     if not volume or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}', volume):
         raise ValueError('A safe dedicated provider volume name is required.')
     if not mount or not re.fullmatch(r'/home/dev/\.[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}', mount):
@@ -31,7 +35,7 @@ def render_compose(project: Path, directory: Path, workspace: Path, settings: Pr
                    agent: AgentConfig, session: str, subnet: str, proxy_ip: str,
                    uid: int, gid: int, interactive: bool,
                    test_upstream_network: str | None = None) -> dict:
-    validate_provider_state(agent.persistent_state_volume, agent.state_mount)
+    validate_provider_state(agent.persistent_state_volume, agent.state_mount, stateless=agent.stateless)
     topology = yaml.safe_load((project / 'docker/compose.yaml').read_text())
     topology['name'] = 'aictrl-' + session
     labels = {'io.aictrl.session': session, 'io.aictrl.managed': 'true'}
@@ -72,6 +76,11 @@ def render_compose(project: Path, directory: Path, workspace: Path, settings: Pr
             'healthcheck': {'test': ['CMD', 'python', '-c', "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2).status==200"],
                             'interval': '1s', 'timeout': '3s', 'retries': 20},
         }
+        if (directory / 'jev_api_key').is_file():
+            topology['services']['gateway']['volumes'].append({
+                'type': 'bind', 'source': str(directory / 'jev_api_key'),
+                'target': '/run/secrets/aictrl/jev_api_key', 'read_only': True,
+                'bind': {'create_host_path': False}})
     container['volumes'][0]['source'] = str(workspace)
     container['cpus'] = settings.limits.cpus
     container['mem_limit'] = str(settings.limits.memory_mb) + 'm'
@@ -84,8 +93,12 @@ def render_compose(project: Path, directory: Path, workspace: Path, settings: Pr
     if test_upstream_network is not None:
         # Deterministic Docker probes attach a synthetic backend to this network.
         topology['networks']['upstream'] = {'external': True, 'name': test_upstream_network}
-    container['volumes'][1] = 'provider-state:' + agent.state_mount
-    topology['volumes']['provider-state'] = {'external': True, 'name': agent.persistent_state_volume}
+    if agent.stateless:
+        del container['volumes'][1]
+        del topology['volumes']['provider-state']
+    else:
+        container['volumes'][1] = 'provider-state:' + agent.state_mount
+        topology['volumes']['provider-state'] = {'external': True, 'name': agent.persistent_state_volume}
     for name in ('proxy-private-ca', 'proxy-public-ca'):
         topology['volumes'][name]['labels'] = labels
     return topology

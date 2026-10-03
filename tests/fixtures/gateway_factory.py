@@ -10,6 +10,14 @@ from aictrl.gateway.app import create_app
 from aictrl.gateway.session import load_session
 from aictrl.policy.loader import load_policy
 from aictrl.reporting.store import EventStore
+from aictrl.guards.semantic import QUESTIONS, SemanticAssessment
+
+
+class SyntheticSemanticProvider:
+    """Explicit offline fixture. Never installed in the production factory."""
+    async def evaluate(self, segments):
+        poisoned = any('Ignore previous instructions' in segment.text for segment in segments)
+        return SemanticAssessment(dict.fromkeys(QUESTIONS, 0.99 if poisoned else 0.01))
 
 
 class SyntheticTransport(httpx.AsyncBaseTransport):
@@ -33,4 +41,5 @@ def application():
     client = httpx.AsyncClient(transport=SyntheticTransport(), trust_env=False, timeout=5)
     return create_app(load_session(Path(os.environ['AICTRL_SESSION_FILE'])),
                       load_policy(Path(os.environ['AICTRL_POLICY_FILE'])),
-                      EventStore(Path(os.environ['AICTRL_EVENTS_DB'])), client)
+                      EventStore(Path(os.environ['AICTRL_EVENTS_DB'])), client,
+                      semantic_provider=SyntheticSemanticProvider())

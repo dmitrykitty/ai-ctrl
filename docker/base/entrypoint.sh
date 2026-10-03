@@ -6,6 +6,7 @@ umask 077
 case "${AICTRL_ADAPTER:-claude}" in
     claude) task_state=/home/dev/.claude ;;
     codex) task_state=/home/dev/.codex ;;
+    demo-agent) task_state=''; [[ "${AICTRL_BOOTSTRAP_MODE:-}" == runtime ]] || { echo 'Demo requires runtime bootstrap' >&2; exit 1; } ;;
     *) echo 'Unsupported provider state' >&2; exit 1 ;;
 esac
 case "${AICTRL_BOOTSTRAP_MODE:-}" in
@@ -48,7 +49,7 @@ esac
 if [[ -f /etc/aictrl/proxy-ca.pem ]]; then
     /usr/local/bin/install-proxy-ca.sh
 fi
-mkdir -p "$task_state"
+if [[ -n "$task_state" ]]; then mkdir -p "$task_state"; fi
 # Prevent usermod's implicit home traversal. Only the explicit no-follow state
 # preparation below may change ownership; workspace links are never followed.
 usermod --home /nonexistent dev
@@ -60,8 +61,10 @@ if [[ "$(id -u dev)" != "$task_uid" ]]; then usermod --uid "$task_uid" dev; fi
 usermod --home /home/dev dev
 # Only container-owned home/state is prepared; never change /workspace.
 chown "$task_uid:$task_gid" /home/dev
-find "$task_state" -xdev -exec chown -h "$task_uid:$task_gid" {} +
-chmod 700 "$task_state"
+if [[ -n "$task_state" ]]; then
+    find "$task_state" -xdev -exec chown -h "$task_uid:$task_gid" {} +
+    chmod 700 "$task_state"
+fi
 export HOME=/home/dev USER=dev LOGNAME=dev
 if [[ "$AICTRL_BOOTSTRAP_MODE" == runtime ]]; then
     setpriv --reuid="$task_uid" --regid="$task_gid" --clear-groups \

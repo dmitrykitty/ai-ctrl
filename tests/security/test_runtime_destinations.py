@@ -33,10 +33,19 @@ def test_public_resolution_returns_checked_numeric_ip(monkeypatch):
     assert asyncio.run(destinations.address('ALLOWED.TEST', 443)) == '1.1.1.1'
 
 
-@pytest.mark.parametrize('records', [[], [{'host': '*.test', 'port': 443}], [{'host': 'allowed.test', 'port': 443, 'url': 'untrusted'}], [{'host': 'allowed.test', 'port': 443}] * 2, [{'host': 'allowed.test', 'port': True}], [{'host': 'allowed.test', 'port': 443, 'connect_ip': '127.0.0.1'}]])
+@pytest.mark.parametrize('records', [[{'host': '*.test', 'port': 443}], [{'host': 'allowed.test', 'port': 443, 'url': 'untrusted'}], [{'host': 'allowed.test', 'port': 443}] * 2, [{'host': 'allowed.test', 'port': True}], [{'host': 'allowed.test', 'port': 443, 'connect_ip': '127.0.0.1'}]])
 def test_malformed_or_unsafe_proxy_configuration_fails_closed(records):
     with pytest.raises(ValueError):
         DestinationList(records)
+
+
+def test_empty_allowlist_denies_every_destination_without_dns(monkeypatch):
+    destinations = DestinationList([])
+    monkeypatch.setattr(socket, 'getaddrinfo', lambda *a: pytest.fail('deny-all policy attempted DNS'))
+    for host in ('api.anthropic.com', 'chatgpt.com', 'api.typesafe.ai', '1.1.1.1', 'localhost'):
+        assert not destinations.permits(host, 443)
+        with pytest.raises(ValueError, match='denied'):
+            asyncio.run(destinations.address(host, 443))
 
 
 def test_synthetic_upstream_requires_explicit_trusted_pin(monkeypatch):

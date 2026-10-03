@@ -31,14 +31,14 @@ def doctor(
 
 @app.command()
 def run(
-    agent: Annotated[str, typer.Argument(help="Agent adapter: claude or codex.")],
+    agent: Annotated[str, typer.Argument(help="Agent adapter: claude, codex or demo-agent.")],
     workspace: Annotated[Path, typer.Argument(help="Workspace directory.")],
     prompt: Annotated[str | None, typer.Option(help="Print-mode prompt sent on stdin; omitted for interactive mode.")] = None,
     timeout: Annotated[int | None, typer.Option(help="Shorter host wall-clock limit in seconds.")] = None,
 ) -> None:
     """Launch a real agent with enforced egress and host-owned cleanup."""
-    if agent not in ('claude', 'codex'):
-        typer.echo('Unsupported agent. Available adapters: claude, codex.', err=True)
+    if agent not in ('claude', 'codex', 'demo-agent'):
+        typer.echo('Unsupported agent. Available adapters: claude, codex, demo-agent.', err=True)
         raise typer.Exit(2)
     try:
         result = (run_claude(workspace, PROJECT_ROOT, prompt=prompt, timeout=timeout) if agent == 'claude'

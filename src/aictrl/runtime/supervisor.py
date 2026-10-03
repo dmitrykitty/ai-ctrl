@@ -22,6 +22,7 @@ from aictrl.runtime.docker import RuntimeDeadline, RuntimeFailure, docker, free_
 from aictrl.runtime.workspace import PROJECT_ROOT, validate_workspace
 from aictrl.runtime.registry import resolve_agent
 from aictrl.policy.loader import load_policy
+from aictrl.runtime.secrets import stage_jev_key
 
 
 @dataclass
@@ -42,7 +43,8 @@ class RuntimeSupervisor:
         if not self.uid or not self.gid:
             raise RuntimeFailure('Run the host supervisor as a non-root user.')
         now = datetime.now(timezone.utc)
-        validate_provider_state(adapter.persistent_state_volume, adapter.state_mount)
+        stateless = getattr(adapter, 'stateless', False)
+        validate_provider_state(adapter.persistent_state_volume, adapter.state_mount, stateless=stateless)
         self.gateway_mode = settings.runtime.routing_mode == RoutingMode.APPLICATION_GATEWAY
         identity = AgentSession(agent_id=adapter.name, adapter=adapter.name, user_id=f'uid-{self.uid}',
                                 profile_id='local', workspace=str(self.workspace), protocol=adapter.protocol,
@@ -50,8 +52,10 @@ class RuntimeSupervisor:
                                 session_token=SecretStr(secrets.token_urlsafe(48)) if self.gateway_mode else None)
         self.agent = adapter.render_config(identity)
         if (self.agent.adapter != adapter.name or self.agent.persistent_state_volume != adapter.persistent_state_volume
-                or self.agent.state_mount != adapter.state_mount):
+                or self.agent.state_mount != adapter.state_mount or self.agent.stateless != stateless):
             raise RuntimeFailure('Rendered adapter identity/provider state differs from trusted metadata.')
+        if any('JEV' in key.upper() for key in self.agent.environment):
+            raise RuntimeFailure('Semantic credentials/configuration cannot enter agent environment.')
         self.identifier = identity.session_id.hex
         self.session = ManagedSession(identity, 'aictrl-' + self.identifier + '-agent', now + timedelta(seconds=settings.limits.wall_time_seconds))
         self._deadline = time.monotonic() + settings.limits.wall_time_seconds
@@ -86,9 +90,7 @@ class RuntimeSupervisor:
 
     def prepare(self) -> None:
         volume = self.agent.persistent_state_volume
-        if not volume:
-            raise RuntimeFailure('A dedicated provider state volume is required.')
-        if self._docker(['ps', '--filter', 'volume=' + volume, '--format', '{{.ID}}']).stdout.strip():
+        if volume and self._docker(['ps', '--filter', 'volume=' + volume, '--format', '{{.ID}}']).stdout.strip():
             raise RuntimeFailure('Provider state is already in use by another container.')
         self._docker(['version', '--format', '{{.Server.Version}}'])
         self._docker(['image', 'inspect', self.agent.image_ref, '--format', '{{.Id}}'])
@@ -104,13 +106,14 @@ class RuntimeSupervisor:
             audit.chmod(0o700)
         # Reserve the same engine-level name used by authentication operations.
         # This stopped container holds no mounts and prevents concurrent state use.
-        lock_name = provider_lease_name(volume)
-        self.lock_name = lock_name
-        self.lock_id = self._docker(['create', '--name', lock_name, '--label', 'io.aictrl.session=' + self.identifier,
+        if volume:
+            lock_name = provider_lease_name(volume)
+            self.lock_name = lock_name
+            self.lock_id = self._docker(['create', '--name', lock_name, '--label', 'io.aictrl.session=' + self.identifier,
                                '--label', 'io.aictrl.managed=true', '--network', 'none', '--cap-drop', 'ALL',
                                '--read-only', '--entrypoint', '/bin/true', self.agent.image_ref]).stdout.strip()
-        if self._docker(['ps', '--filter', 'volume=' + volume, '--format', '{{.ID}}']).stdout.strip():
-            raise RuntimeFailure('Provider state became busy; refusing concurrent use.')
+            if self._docker(['ps', '--filter', 'volume=' + volume, '--format', '{{.ID}}']).stdout.strip():
+                raise RuntimeFailure('Provider state became busy; refusing concurrent use.')
         subnet = free_subnet(self._docker)
         self.proxy_ip = str(subnet[2])
         self.internal_network = 'aictrl-' + self.identifier + '_agent-internal'
@@ -128,10 +131,13 @@ class RuntimeSupervisor:
             identity = self.session.identity
             record = {name: str(getattr(identity, name)) for name in ('session_id', 'agent_id', 'adapter', 'user_id', 'profile_id', 'protocol')}
             record['expires_at'] = self.session.deadline.isoformat()
+            if self.agent.stateless:
+                record['protocol'] = None
             record['session_token'] = identity.session_token.get_secret_value()
             session_file = Path(self.directory.name) / 'session.json'
             session_file.write_text(json.dumps(record))
             session_file.chmod(0o400)
+            stage_jev_key(Path(self.directory.name))
         topology = render_compose(self.project, Path(self.directory.name), self.workspace, self.settings, self.agent,
                                   self.identifier, str(subnet), self.proxy_ip, self.uid, self.gid, self.interactive,
                                   self.test_upstream_network)

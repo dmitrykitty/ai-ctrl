@@ -27,6 +27,10 @@ class CodexRuntime(StrictConfig):
     auth_mode: Literal['subscription']
 
 
+class DemoRuntime(StrictConfig):
+    image: str = Field(min_length=1)
+
+
 class RuntimeLimits(StrictConfig):
     cpus: float = Field(gt=0, allow_inf_nan=False)
     memory_mb: int = Field(gt=0)
@@ -68,9 +72,10 @@ class GatewayRuntime(StrictConfig):
 
 class ProjectConfig(StrictConfig):
     schema_version: Literal[1]
-    milestone: Literal["T01", "T02", "T03", "T04", "T05"]
+    milestone: Literal["T01", "T02", "T03", "T04", "T05", "T06"]
     claude: ClaudeRuntime
     codex: CodexRuntime | None = None
+    demo: DemoRuntime | None = None
     limits: RuntimeLimits
     runtime: RuntimeEgress = Field(default_factory=RuntimeEgress)
     gateway: GatewayRuntime = Field(default_factory=GatewayRuntime)

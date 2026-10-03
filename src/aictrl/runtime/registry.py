@@ -8,6 +8,7 @@ from typing import Protocol
 from aictrl.adapters.base import AgentAdapter, RoutingMode
 from aictrl.adapters.claude import ClaudeAdapter
 from aictrl.adapters.codex import CodexAdapter
+from aictrl.adapters.demo import DemoAgentAdapter
 from aictrl.runtime.auth import claude_authenticated
 from aictrl.runtime.codex_auth import codex_authenticated
 from aictrl.runtime.config import ProjectConfig
@@ -31,6 +32,8 @@ AGENT_REGISTRY: Mapping[str, RuntimeAgentSpec] = MappingProxyType({
                                claude_authenticated, 'make claude-login'),
     'codex': RuntimeAgentSpec(CodexAdapter, lambda settings: settings.codex,
                               codex_authenticated, 'make codex-login', requires_gateway=True),
+    'demo-agent': RuntimeAgentSpec(DemoAgentAdapter, lambda settings: settings.demo,
+                                   lambda image: True, '', requires_gateway=True),
 })
 
 

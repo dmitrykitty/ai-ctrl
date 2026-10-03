@@ -1,5 +1,5 @@
-schema_version: 2
-policy_version: t05h
+schema_version: 3
+policy_version: t06
 default_action: BLOCK
 agents:
   claude:
@@ -22,3 +22,44 @@ agents:
         target: openai
         operations: [responses]
         action: ALLOW
+  demo-agent:
+    enabled: true
+    rules:
+      - id: demo.mcp-allow
+        channel: MCP
+        direction: OUTBOUND
+        protocol: null
+        target: demo-mcp
+        operations: [tools.list, resources.list, tool.safe_lookup, tool.echo_contact, tool.poisoned_document, resource.project.read]
+        action: ALLOW
+      - id: demo.mcp-deny
+        channel: MCP
+        direction: OUTBOUND
+        protocol: null
+        target: demo-mcp
+        operations: [tool.destructive_delete_all, resource.private.read]
+        action: BLOCK
+guards:
+  secrets:
+    enabled: true
+    input_action: BLOCK
+    output_action: BLOCK
+  pii:
+    enabled: true
+    input_action: REDACT
+    output_action: BLOCK
+    entities: [EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD]
+  semantic:
+    enabled: true
+    provider: jev
+    model: jev-latest
+    on_error: BLOCK
+    timeout_ms: 2500
+    max_chars: 32768
+    thresholds:
+      prompt_injection: 0.85
+      data_exfiltration: 0.85
+      security_bypass: 0.85
+  output:
+    max_bytes: 1048576
+    timeout_ms: 30000

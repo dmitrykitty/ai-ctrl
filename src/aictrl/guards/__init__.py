@@ -1,1 +1,1 @@
-"""Guards module; implementation follows the approved milestones."""
+"""Trusted guards; request content stays ephemeral."""

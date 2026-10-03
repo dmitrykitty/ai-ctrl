@@ -24,19 +24,19 @@
   "mitmproxy_base_image": "mitmproxy/mitmproxy@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f",
   "mitmproxy_version": "Mitmproxy: 12.2.3",
   "proxy_local_ref": "aictrl-proxy:mitm-t02",
-  "proxy_image_id": "sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f",
+  "proxy_image_id": "sha256:aa7e0d1b9ec3ed70ff68572c4af75d933a5ebb1a288c41c0cf6d1db6232831f6",
   "proxy_repo_digests": [
-    "aictrl-proxy@sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f"
+    "aictrl-proxy@sha256:aa7e0d1b9ec3ed70ff68572c4af75d933a5ebb1a288c41c0cf6d1db6232831f6"
   ],
   "claude_runtime_local_ref": "aictrl-claude:2.1.285-t03",
   "claude_runtime_image_id": "sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf",
   "claude_runtime_repo_digests": [
     "aictrl-claude@sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf"
   ],
-  "gateway_local_ref": "aictrl-gateway:t05",
-  "gateway_image_id": "sha256:d6f9d844ce307f31f0f2124aab544804c304c7193d5639f46b754eda4ab0c874",
+  "gateway_local_ref": "aictrl-gateway:t06",
+  "gateway_image_id": "sha256:82f1b5af26f4d76cad210c914b298178b52f34a9764399f2a093070680eb2008",
   "gateway_repo_digests": [
-    "aictrl-gateway@sha256:d6f9d844ce307f31f0f2124aab544804c304c7193d5639f46b754eda4ab0c874"
+    "aictrl-gateway@sha256:82f1b5af26f4d76cad210c914b298178b52f34a9764399f2a093070680eb2008"
   ],
   "codex_version": "0.159.3",
   "codex_release_url": "https://github.com/openai/codex/releases/tag/rust-v0.159.3",
@@ -52,5 +52,10 @@
     "copying": "b7993225104d90ddd8024fd838faf300bea5e83d91203eab98e29512acebd69c",
     "license": "400d38e5cfee181230373a8b02d38f50271a5bf62c62410382efddb8e8b19e22"
   },
-  "codex_code_mode_host_sha256_amd64": "85fe4cc711712d3f5d3c37fad955c240acb9ce878c1c95d6f8b45028dcc36d7c"
+  "codex_code_mode_host_sha256_amd64": "85fe4cc711712d3f5d3c37fad955c240acb9ce878c1c95d6f8b45028dcc36d7c",
+  "demo_local_ref": "aictrl-demo:t06",
+  "demo_image_id": "sha256:9707fb91dc66d4a70a86f11893130a5d6d38696d17c4b99417e254d332c51063",
+  "demo_repo_digests": [
+    "aictrl-demo@sha256:9707fb91dc66d4a70a86f11893130a5d6d38696d17c4b99417e254d332c51063"
+  ]
 }

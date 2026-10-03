@@ -14,7 +14,7 @@ class GatewaySession(BaseModel):
     session_id: UUID
     agent_id: Identifier
     adapter: Identifier
-    protocol: AgentProtocol
+    protocol: AgentProtocol | None
     user_id: Identifier
     profile_id: Identifier
     expires_at: AwareDatetime

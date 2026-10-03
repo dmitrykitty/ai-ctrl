@@ -6,6 +6,9 @@ import httpx
 
 from aictrl.contracts import AgentProtocol, Channel, Direction, InspectionLevel
 from aictrl.gateway.headers import request_headers
+from aictrl.gateway.inspection import text_content
+from aictrl.guards.models import InspectionSegment, Source
+from aictrl.gateway.sse import AnthropicTerminal
 
 UPSTREAM = 'https://api.anthropic.com'
 PATHS = MappingProxyType({'/anthropic/v1/messages': 'messages',
@@ -35,5 +38,18 @@ class AnthropicMessagesHandler:
     filter_request_headers = staticmethod(request_headers)
 
     @staticmethod
-    def new_stream_observer():
-        return None
+    def extract_inspection(payload: dict) -> tuple[InspectionSegment, ...]:
+        segments = text_content(payload.get('system'), ('system',), Source.SYSTEM_INSTRUCTION)
+        for index, message in enumerate(payload['messages']):
+            if not isinstance(message, dict):
+                raise ValueError('Invalid message shape.')
+            source = Source.MODEL_OUTPUT if message.get('role') == 'assistant' else Source.USER_INPUT
+            segments.extend(text_content(message.get('content'), ('messages', index, 'content'), source))
+        return tuple(segments)
+
+    @staticmethod
+    def new_output_buffer(max_bytes: int):
+        from aictrl.gateway.output import AnthropicOutputBuffer
+        return AnthropicOutputBuffer(max_bytes)
+
+    new_stream_observer = staticmethod(AnthropicTerminal)

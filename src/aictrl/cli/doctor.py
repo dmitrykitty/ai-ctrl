@@ -1,4 +1,5 @@
 import shutil
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -81,4 +82,7 @@ def inspect_environment(project: Path) -> list[Check]:
         )
         if configuration.runtime.routing_mode == 'APPLICATION_GATEWAY':
             checks.append(docker_check('Native gateway image', ['image', 'inspect', configuration.gateway.image, '--format', '{{.Id}}'], optional=True))
+    checks.append(Check('OK' if os.environ.get('AICTRL_JEV_API_KEY') else 'WARN', 'Semantic provider',
+                        'configured' if os.environ.get('AICTRL_JEV_API_KEY') else
+                        'unavailable; requests requiring semantic inspection will fail closed'))
     return checks

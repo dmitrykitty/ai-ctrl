@@ -38,11 +38,11 @@ class Frames(httpx.AsyncByteStream):
 def native_policy(*, enabled=True, action='ALLOW', version='t03'):
     rule = AdmissionRule(id='native.messages', channel='LLM', direction='OUTBOUND', protocol='ANTHROPIC_MESSAGES',
                          target='anthropic', operations=('messages', 'count_tokens'), action=action)
-    return Policy(schema_version=2, policy_version=version, default_action='BLOCK',
+    return Policy(schema_version=3, policy_version=version, default_action='BLOCK',
                   agents={'claude': AgentPolicy(enabled=enabled, rules=(rule,))})
 
 
-def fixture(tmp_path, *, policy=None, status=200, frames=None):
+def fixture(tmp_path, *, policy=None, status=200, frames=None, response_type='text/event-stream'):
     session = GatewaySession(session_id=uuid4(), agent_id='claude', adapter='claude', protocol='ANTHROPIC_MESSAGES', user_id='local', profile_id='default',
                              expires_at=datetime.now(timezone.utc) + timedelta(minutes=5), session_token=TOKEN)
     policy = policy or native_policy()
@@ -55,7 +55,7 @@ def fixture(tmp_path, *, policy=None, status=200, frames=None):
         assert events and events[-1].reason_code == 'llm.policy.allowed'
         calls.append(request)
         return httpx.Response(status, stream=frames or Frames(), headers={
-            'content-type': 'text/event-stream', 'request-id': 'synthetic-provider-request',
+            'content-type': response_type, 'request-id': 'synthetic-provider-request',
             'anthropic-ratelimit-unified-status': 'allowed', 'retry-after': '7', 'x-should-retry': 'false',
             'connection': 'keep-alive, x-hop', 'x-hop': 'remove', 'x-aictrl-session': 'must-strip',
         })
@@ -163,7 +163,7 @@ def test_caller_selected_upstream_is_never_used(tmp_path):
 
 @pytest.mark.parametrize('status', [400, 401, 429, 503])
 def test_provider_status_error_bytes_and_metadata_preserved(tmp_path, status):
-    app, store, session, calls, client = fixture(tmp_path, status=status, frames=Frames([b'{"type":"error","error":{"type":"overloaded_error"}}']))
+    app, store, session, calls, client = fixture(tmp_path, status=status, frames=Frames([b'{"type":"error","error":{"type":"overloaded_error"}}']), response_type='application/json')
     response = asyncio.run(invoke(app, client))
     assert response.status_code == status and b'overloaded_error' in response.content
     assert len(calls) == 1 and store.events(session.session_id)[-1].reason_code == 'llm.upstream_failed'

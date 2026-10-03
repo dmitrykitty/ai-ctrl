@@ -5,6 +5,7 @@ from typing import Protocol
 import httpx
 
 from aictrl.contracts import AgentProtocol, Channel, Direction, InspectionLevel
+from aictrl.guards.models import InspectionSegment
 
 
 class StreamObserver(Protocol):
@@ -24,6 +25,10 @@ class NativeProtocolHandler(Protocol):
     def resolve_operation(self, method: str, path: str) -> str | None: ...
 
     def validate_payload(self, payload: object, operation: str) -> bool: ...
+
+    def extract_inspection(self, payload: dict) -> tuple[InspectionSegment, ...]: ...
+
+    def new_output_buffer(self, max_bytes: int): ...
 
     def build_upstream_url(self, operation: str, raw_query: bytes) -> httpx.URL: ...
 
