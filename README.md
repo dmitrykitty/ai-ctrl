@@ -1,6 +1,6 @@
 # AI Control Layer
 
-T01–T05 are complete. Real Claude Code 2.1.285 and Codex CLI 0.159.3 use saved subscription authentication through native application gateways, strict admission policy and durable SQLite events. Both use the shared Docker isolation and separate provider state. Codex's Responses path and real local read/write/tool-follow-up are qualified. See [verification](NOTES.md) and the approved [plan](plan.md).
+T01–T05 and the PRE-T06/T05H architecture checkpoint are complete. Real Claude Code 2.1.285 and Codex CLI 0.159.3 use saved subscription authentication through native application gateways, strict admission policy and durable SQLite events. Both use the shared Docker isolation and separate provider state. Codex's Responses path and real local read/write/tool-follow-up are qualified. See [verification](NOTES.md) and the approved [plan](plan.md).
 
 ## Prepare and authenticate
 
@@ -96,7 +96,7 @@ Gateway decisions create durable SecurityEvents. Kernel-level rejected bypass is
 
 The private gateway accepts POST `/anthropic/v1/messages` and `/anthropic/v1/messages/count_tokens`, forwarding to the corresponding paths on fixed `https://api.anthropic.com`. Queries, original body bytes, provider authorization, version/beta headers and relevant native client headers are preserved. Internal identity, caller Host and hop headers are stripped; outbound Host and length are generated correctly. SSE bytes, pings, event order, upstream statuses, errors and end-to-end response headers pass through incrementally. See the [native gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol).
 
-`config/policy.yaml` is strict, versioned and defaults to BLOCK. Only an enabled declared agent with an explicitly allowed native operation is admitted. Missing/wrong/expired identity, unsupported routes, denied/disabled policy and invalid JSON cause no upstream action. Policy errors and admission-store failures fail closed. HTTPX uses one client per gateway, explicit limits/timeouts, no environment proxy inheritance, no POST retries and no redirect following.
+`config/policy.yaml` uses configuration schema 2 and defaults to BLOCK. Enabled agents have exact rules for channel, direction, protocol, target, operations and ALLOW/BLOCK; a matching BLOCK wins regardless of rule order. Unknown fields/enums, empty operation lists, wildcard identifiers and duplicate rule IDs are rejected. Schema 1 policies must be migrated explicitly; shared session/event contracts remain schema 1. Missing/wrong/expired identity, unsupported routes, denied/disabled policy and invalid JSON cause no upstream action. Policy errors and admission-store failures fail closed. HTTPX uses one client per gateway, explicit limits/timeouts, no environment proxy inheritance, no POST retries and no redirect following.
 
 The generic proxy excludes each adapter's inference hosts in gateway mode, including duplicate authentication declarations or test pins. These are `api.anthropic.com` for Claude and `api.openai.com`/`chatgpt.com` for Codex. Declared authentication hosts remain available. `EGRESS_ONLY` remains an explicit trusted Claude alternative with destination-only opaque CONNECT and no application admission/audit; the Codex launcher requires `APPLICATION_GATEWAY`.
 
@@ -128,9 +128,23 @@ T05's one final offline suite passed 194 tests. Focused Codex Docker qualificati
 
 The subsequent T05 profile cleanup passed 13 targeted adapter/profile tests and 20 checks in one real local-tool session. It rebuilt only the Codex image; full offline and historical Docker matrices were not repeated for this small configuration change. The read/create-file/follow-up task now passes under the unchanged external boundary.
 
+T05H passed 227 offline tests, 47 Claude gateway Docker checks, 42 Codex checks and six provider lease checks. One real smoke per provider returned AICTRL_HARDENING_CLAUDE_OK / AICTRL_HARDENING_CODEX_OK with durable admission/completion after cleanup. No security boundary or native profile changed. T06 remains TODO.
+
 Defaults remain 2 CPUs, 2048 MiB RAM, 256 PIDs and 600 seconds including preparation. `--timeout` only shortens the deadline. Host SIGINT/SIGTERM return 130/143, deadline 124, and ordinary exit is propagated. Cleanup preserves workspace and provider state.
 
-Gateway admission buffers a bounded request body (16 MiB maximum); response streams are not buffered in full. Claude completion records transport completion. Codex additionally recognizes complete native terminal SSE framing with a bounded 128-byte line prefix, so the client's close after response.completed still records completion and incomplete/error streams record failure. Payload bytes are relayed unchanged; usage and semantic output are not inspected. Gateway overhead was not separately measured. Auxiliary provider routes can be denied. Semantic/output guards, MCP authorization, budgets and dashboard remain later milestones. T05 is complete; T06 awaits its instruction.
+Gateway admission buffers a bounded request body (16 MiB maximum); response streams are not buffered in full. Claude completion records transport completion. Codex additionally recognizes complete native terminal SSE framing with a bounded 128-byte line prefix, so the client's close after response.completed still records completion and incomplete/error streams record failure. Independent native protocol handlers share one control pipeline and durable EventSink boundary; routing uses trusted protocol metadata. Payload bytes are relayed unchanged; usage and semantic output are not inspected. Auxiliary provider routes can be denied. Semantic/output guards, MCP authorization, budgets and dashboard remain later milestones; T06 awaits its instruction.
+
+## Local gateway benchmark
+
+```bash
+make benchmark-gateway
+```
+
+This uses a deterministic local HTTP/SSE upstream with no provider or model traffic. It measures direct HTTP, complete gateway admission/stream/completion, policy decisions and durable SQLite appends at concurrency 1/10/50. Results include failures, p50/p95/p99 and successful requests/s and are saved to `.aictrl/benchmarks/latest.json`. Tests check correctness without timing thresholds.
+
+On the qualified Python 3.12.15/i7-10750H Linux host, 500 requests per sample produced gateway p50/p95/p99 of 10.492/11.707/13.553 ms at concurrency 1; direct HTTP was 2.029/3.005/3.354 ms. Gateway throughput was 94.263, 175.534 and 93.524 requests/s at 1/10/50, with zero failures in the final run. Durable append p50 was 2.461 ms versus policy 5.496 µs. Higher concurrency has substantial local scheduling/storage tails; these are synthetic application-layer measurements, not provider or enterprise capacity claims. Full results and limitations are in [architecture](ARCHITECTURE.md) and [notes](NOTES.md).
+
+The current deployment keeps one agent/gateway/proxy/private network per session, a local Docker supervisor, SQLite and one lease per provider-state identity. Shared gateways, distributed identity and external event backends are future deployment work; current code boundaries prepare that work without implementing it.
 
 Project-owned environment variables use `AICTRL_`. Bootstrap uses `AICTRL_BOOTSTRAP_MODE`, `AICTRL_PROXY_IP`, `AICTRL_GATEWAY_IP`, `AICTRL_ROUTING_MODE`, `AICTRL_UID` and `AICTRL_GID`; raw Compose also accepts `AICTRL_WORKSPACE` and `AICTRL_RUNTIME_DIR`. Use the normal launcher for validated per-session configuration. Run targeted tests during implementation; documentation edits do not require another test run.
 

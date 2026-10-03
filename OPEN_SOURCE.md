@@ -59,3 +59,9 @@ The public profile preparer, CodexAdapter, native status wrapper, shared-runtime
 The subsequent T05 cleanup changes only the project-owned public profile to use AICTRL's outer container boundary instead of Codex's nested sandbox, with approval never and web search disabled. Official binaries, source pins and license notices are unchanged; no new upstream code or dependency is introduced.
 
 Version, source URLs, SHA-256 pins, license checksums and final locally built image identities are recorded in `docker/images.lock.json`. The proxy, base and Claude images were reused without rebuilding. Official configuration references were checked at implementation time; saved subscription forwarding to the fixed native ChatGPT backend was explicitly approved and actually qualified, as recorded in NOTES.md.
+
+## T05H architecture checkpoint
+
+The trusted runtime/protocol registries, independent native handlers, common ControlPipeline, policy schema 2 rules, EventSink contract, synthetic extension tests and local HTTP benchmark are new project code. They reuse the existing locked Python dependencies and standard-library SQLite; no plugin framework, ORM, distributed backend, judge or additional dependency was imported. Agent/native auth/bootstrap binaries and license notices are unchanged.
+
+`docker/compose.yaml` remains an adaptation of the attributed MIT agent-sandbox topology. T05H changes only the logical provider-state key to a generic external volume rendered from trusted adapter metadata; actual provider paths, private topology, privileges, limits and mount isolation are preserved. The changed gateway source was repackaged in the existing digest-pinned gateway image with hash-locked dependencies. Base, Claude, Codex and proxy images were reused; their upstream notices remain intact.

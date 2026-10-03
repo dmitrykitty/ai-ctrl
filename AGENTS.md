@@ -1,6 +1,6 @@
 # AI Control Layer
 
-Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T05 are COMPLETE. T05 passed with real Codex subscription Responses forwarding and a real local read/write/tool-follow-up proof. The user authorized disabling only Codex's inner sandbox in the packaged Docker profile: danger-full-access, approval never, web search disabled. AICTRL's Docker filesystem/network/UID/capability boundary remains the enforcement layer. Stop after T05; do not start T06 without its instruction.
+Read `NOTES.md` and `plan.md` before work. The approved plan is the architecture source of truth. T01–T05 are COMPLETE. PRE-T06/T05H architecture hardening is COMPLETE. T06 is next and must not start automatically. T05 passed with real Codex subscription Responses forwarding and a real local read/write/tool-follow-up proof. The user authorized disabling only Codex's inner sandbox in the packaged Docker profile: danger-full-access, approval never, web search disabled. AICTRL's Docker filesystem/network/UID/capability boundary remains the enforcement layer. Stop after T05H; do not start T06 without its instruction.
 
 ## Goal and architecture
 
@@ -49,3 +49,10 @@ Run the full offline suite only:
 Documentation-only changes do not require rerunning tests.
 
 Prefer targeted feedback loops measured in seconds over full-suite feedback loops measured in minutes.
+
+
+## T05H checkpoint
+
+Trusted runtime/handler registries replace brand selection; RuntimeSupervisor creates one identity/token and renders once. Native commands belong to adapters; Compose uses validated code-owned provider-state metadata and stable volume leases. Independent native handlers compose with gateway/control.py ControlPipeline. Policy configuration is schema 2, version t05h, with exact enabled-agent rules and BLOCK precedence; shared contracts remain unchanged schema 1. EventSink.append must commit durably before returning; SQLite WAL/FULL and safe audit remain the actual backend. No guards/MCP/governance/distributed services were added.
+
+T05H passed 227 final offline tests, 47 Claude gateway Docker checks, 42 Codex checks, six provider lease checks, Compose validation and one real smoke per provider with durable completion/cleanup. make benchmark-gateway measures local synthetic HTTP overhead at concurrency 1/10/50 with a direct baseline, policy and SQLite measurements; full numbers/limitations are in NOTES.md and ARCHITECTURE.md. Do not repeat successful checks for docs-only changes. Future deterministic/Jev stages belong in ControlPipeline before durable admission; MCP needs its own native handler and a coordinated protocol-contract decision. Stop after T05H; T06 stays TODO until instructed.

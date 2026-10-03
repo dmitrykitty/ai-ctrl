@@ -1,5 +1,138 @@
 # Implementation notes
 
+## T05H architecture hardening verified on 2026-10-03 — PASS / COMPLETE
+
+The PRE-T06 checkpoint preserves T01–T05 completion and the current isolation/durable admission boundary. It does not implement guards, MCP, governance or distributed deployment. Debt confirmed before refactoring and resolved (A–J); the following checklist preserves the original findings:
+
+- [x] A: RuntimeSupervisor selects concrete Claude/Codex classes.
+- [x] B: run_agent branches on provider for configuration, authentication and prompt commands.
+- [x] C: a preliminary AgentSession/config is replaced by another identity and reconstructed adapter.
+- [x] D: Compose chooses provider volume keys and mount paths by brand.
+- [x] E: create_app chooses gateway implementations by adapter brand.
+- [x] F: ResponsesGateway inherits AnthropicGateway.
+- [x] G: PolicyEngine embeds provider/protocol/target literals.
+- [x] H: admission, events, upstream transport and native protocol behavior share one provider class.
+- [x] I: gateway admission depends directly on SQLite EventStore.
+- [x] J: no independent gateway/policy/durable SQLite overhead measurement exists.
+
+The completed replacement is a trusted static adapter registry, adapter-owned native commands, one runtime-created identity/config, generic provider-state rendering, independent protocol handlers composed with ControlPipeline, strict per-agent policy rules (configuration schema 2), and a synchronous durable EventSink protocol. Shared serialized contracts remain schema 1. Measurements use a local synthetic upstream and preserve SQLite WAL/FULL commits.
+
+
+### T05H implementation and offline evidence
+
+RuntimeSupervisor now accepts a trusted adapter, creates exactly one authoritative AgentSession/token and renders configuration once. The immutable RuntimeAgentSpec registry owns factory/config/auth/hint/gateway requirements; run_agent no longer selects brands or reconstructs adapters. Adapter metadata includes typed protocol/billing and provider-owned prompt commands; the unchanged Codex exec/stderr privacy wrapper moved into CodexAdapter. The generic external provider-state Compose key validates trusted named-volume/home metadata and uses a stable volume-derived reservation, preserving both native authentication lock names. Missing state, bind syntax, host paths, traversal and nested/wildcard paths fail before Docker actions. Auth/bootstrap remain explicit Claude/Codex allowlists and reviewed extension points, not dynamic configuration.
+
+GatewaySession adds required internal protocol metadata; it is not a shared serialized contract. The static protocol registry selects independent AnthropicMessagesHandler/ResponsesHandler instances from that trusted protocol. Agent/adapter consistency is separate. ControlPipeline owns normalized requests, identity, generic policy, bounded RAM-only validation, durable ALLOW/BLOCK, one upstream send, raw streaming and correlated safe completion/failure. Native handlers own paths, fixed origins, headers and terminal framing; Responses no longer inherits Anthropic. ControlPipeline imports EventSink/StoreFailure, not concrete SQLite queries. EventStore retains its existing connection/transaction/storage logic and query interface; StoreFailure is re-exported for existing query callers.
+
+Policy configuration explicitly migrates to schema 2 and version t05h. Enabled-agent exact rules match channel/direction/protocol/target/operation/inspection; matching BLOCK wins independently of order, otherwise ALLOW, otherwise BLOCK. IDs/enums/unknown fields/nonempty operations/global duplicate IDs are validated. Schema 1 receives a safe explicit migration error. The engine contains zero Claude/Codex/Anthropic/OpenAI literals or protocol branches. src/aictrl/contracts.py, uv.lock, pyproject.toml, firewall/bootstrap, native profiles, provider auth restrictions and upstream/header/SSE helpers remain byte-for-byte unchanged.
+
+Targeted adapter/runtime/Compose checks: 52 passed. Policy/gateway/Responses/terminal/store/integration group: 103 passed initially and one enum model_copy handling case failed; that case was corrected and rerun successfully. New architecture group: 16 passed initially and one test compared the native empty-query URL incorrectly; only its assertion was corrected and rerun successfully. The corrected policy case and architecture checks cover the synthetic third RuntimeAgentSpec/adapter, one render/identity/token, generic state/lease, existing ResponsesHandler, policy, durable admission/events, stripping, cleanup, immutable registries, unsupported protocol startup, missing/unsafe state, APP_GATEWAY requirement, non-SQLite sink failure and bounded body rejection. No third production adapter, authentication mechanism or image was added.
+
+Benchmark smoke passed using actual loopback HTTP and paired durable events; it asserts correctness only. One final make test passed **227 tests in 1.76 seconds**, including the final benchmark fixture, all shared serialization tests and both native protocol regressions. It is not repeated for subsequent docs-only changes.
+
+Only the changed gateway was rebuilt: aictrl-gateway:t05 is now sha256:d6f9d844ce307f31f0f2124aab544804c304c7193d5639f46b754eda4ab0c874, recorded in docker/images.lock.json. Base, Claude, Codex and proxy images/pins were reused. make verify-gateway-boundary passed **47** actual Docker checks and make verify-codex-boundary passed **42**, once each after stabilization. They cover native raw Messages/count_tokens/Responses/SSE/tool-follow-up composition, admission/completion/BLOCK attribution, proxy partition, direct/host/sibling/DNS/UDP/IPv6 denials, absence of host credentials/socket, UID/GID/capability/NNP/resource boundaries, workspace/state writes/preservation, startup readiness and cleanup. Denied upstream/host hit counts remain zero. make compose-config validated the runtime and both auth topologies. The volume-derived lease qualification passed **six** actual checks: second Codex refused, failed contender preserved its owner, concurrent native auth refused, Claude/Codex prepared independently, full cleanup and both provider volumes preserved. The full historical T02 signal/deadline matrix and auth-only probes were not repeated: those mechanisms/commands are unchanged, while the focused Docker checks exercise changed ownership, mounts, readiness, forwarding and cleanup. No authentication flow or credential-file inspection/copy occurred.
+
+
+### T05H real-provider regression
+
+One final Claude command after green offline/synthetic checks:
+
+    .venv/bin/aictrl run claude demo/project --prompt 'Reply with exactly: AICTRL_HARDENING_CLAUDE_OK' --timeout 90
+
+Actual native output was exactly **AICTRL_HARDENING_CLAUDE_OK**, native/launcher exit 0. Session **18da6e18-6e21-42eb-b25e-39bb9e705eb6** has durable ALLOW **b367b63a-0723-46f0-97fa-17c29d268a92** and completion AUDIT **3c13055b-a95c-4cfa-812f-54d188125638**, correlated by request **e3502ff6-0abe-41dc-a5ad-bc95e823b93a**. They were read after production cleanup and identify claude/claude, LLM OUTBOUND, ANTHROPIC_MESSAGES, STRUCTURED, policy t05h and shared schema 1. Admission/completion occurred at 20:44:33.287931/20:44:35.762573 UTC. No payload/provider credential/internal token appears in the safe event fields.
+
+
+One final Codex command:
+
+    .venv/bin/aictrl run codex demo/project --prompt 'Reply with exactly: AICTRL_HARDENING_CODEX_OK' --timeout 90
+
+Actual native output was exactly **AICTRL_HARDENING_CODEX_OK**, native/launcher exit 0. Session **c85da670-dbb8-4528-834e-089baf380353** has durable ALLOW **0344747d-ce98-4101-8566-1096a06c7e05** and completion AUDIT **c8c85357-4ab0-4e93-8616-ab8f79b16da5**, correlated by request **6f0b37bc-7233-4e9d-85e3-e169edcba334**. They identify codex/codex, LLM OUTBOUND, RESPONSES, STRUCTURED, policy t05h and shared schema 1. Admission/completion occurred at 20:45:31.937197/20:45:34.647557 UTC. Four unsupported native auxiliary/catalog requests remained durable BLOCK; no endpoint, proxy allowance or fallback was added.
+
+Both safe event sets were read after production cleanup. Read-only checks found zero session-labelled containers/networks/volumes and no ephemeral host identity directories for either UUID. Both named provider volumes, workspace and audit survived; audit directory/database remain 0700/0600. Each real smoke ran once. No live provider call or test was repeated for documentation. The old Codex local file-tool proof was not rerun: prompt_command contains the exact existing exec flags and stderr wrapper, while the Docker verifier already exercises the unchanged native tool-call/follow-up path. No auth flow was repeated and no native credential file was opened, exported or copied.
+
+### Local synthetic performance, 2026-10-03
+
+Command: make benchmark-gateway. Final measurement: **20:34:45 UTC**, Python 3.12.15, Linux 7.0.0-34-generic x86_64/glibc 2.43, Intel i7-10750H @ 2.60 GHz, 12 logical CPUs. SQLite directory: this checkout’s .aictrl/benchmarks on the host filesystem. Client, local upstream and gateway share one asyncio/h11 Python process. No TLS, Docker network cost, external provider, local model, judge or deliberate provider delay is measured. WAL/FULL admission and completion commits are retained. Each independent load cohort uses a fresh downstream pool and three warm-up requests; the gateway keeps production upstream connection limits 20/10. Nearest-rank percentiles use perf_counter_ns and include the complete HTTP stream/final commit.
+
+| Path | Concurrency | Requests | Successful / failed | p50 / p95 / p99 (ms) | Successful requests/s |
+|---|---:|---:|---|---|---:|
+| Direct | 1 | 500 | 500 / 0 | 2.029 / 3.005 / 3.354 | 461.194 |
+| Gateway | 1 | 500 | 500 / 0 | 10.492 / 11.707 / 13.553 | 94.263 |
+| Direct | 10 | 500 | 500 / 0 | 19.612 / 23.485 / 42.028 | 481.954 |
+| Gateway | 10 | 500 | 500 / 0 | 54.882 / 72.378 / 103.500 | 175.534 |
+| Direct | 50 | 500 | 500 / 0 | 96.106 / 650.011 / 1039.039 | 244.193 |
+| Gateway | 50 | 500 | 500 / 0 | 395.450 / 1291.600 / 2161.422 | 93.524 |
+
+100,000 policy-only decisions: p50/p95/p99 **5.496 / 9.370 / 10.396 microseconds**. 300 durable EventStore appends (including serialization, connection and commit): **2.461 / 2.753 / 3.281 ms**. Append p50/p95/p99 under the actual gateway load: **2.664/3.058/3.874 ms** at 1, **3.587/10.173/35.962** at 10, **4.663/11.981/36.826** at 50. All 1509 gateway requests including warm-ups have paired durable ALLOW/completion, 3018 total synthetic hits, and no internal token in SQLite. The JSON result is .aictrl/benchmarks/latest.json (ignored local artifact); benchmark SQLite files are removed afterwards.
+
+Durable SQLite writes materially outweigh generic policy cost; two commits plus the extra HTTP hop form much of the sequential overhead. At concurrency 50, local scheduling/pool/storage contention produces a substantial tail. The direct baseline itself degrades at 50, so the tail is not solely SQLite or native protocol handling. This is local synthetic application-layer overhead, not inferred provider latency, an enterprise throughput guarantee or distributed deployment proof. No speculative policy index, shared persistent SQLite writer, async admission, weakened fsync or retry was introduced.
+
+Measurement diagnostics were handled openly: the initial proto=0 listener skipped asyncio TCP_NODELAY, giving direct p50 45.019 ms and gateway 50.654 ms at concurrency 1 despite no provider delay. A short direct-only probe confirmed about 42 ms and client TCP_NODELAY=1; inspection of pinned asyncio identified the server socket protocol check. Only the benchmark listener now requests IPPROTO_TCP. The next run measured direct/gateway p50 1.917/10.531 ms, but reported **499 successful / 1 transport failure** at gateway concurrency 50 and exited nonzero. Fresh downstream pools for independent cohorts remove stale cross-phase connections from the experiment; the final run above has zero failures without retries. Diagnostic JSON remains in ignored initial-proto-zero.json and shared-client-pools.json alongside latest.json. No failed request was silently reclassified as success and production networking was unchanged.
+
+### Scalability and T06 boundary
+
+The implementation remains a local per-session agent/gateway/proxy/private network on one Docker host, with local SQLite, one active lease per provider-state identity, no distributed session registry and no horizontal orchestration. It favors strong isolation and demo reliability over density for thousands of agents. These constraints are now deployment/storage boundaries rather than provider-specific control logic.
+
+A possible enterprise deployment would need stateless shared gateway replicas, a trusted distributed identity/session service, coherent policy snapshots/cache, acknowledged transactional EventSink (for example a future Postgres/Kafka backend), and protected auth state per user/principal or short-lived credentials from a broker. None exists in this checkpoint. Security-critical admission/BLOCK stays synchronous; only separate noncritical telemetry/counters/dashboard samples could later be batched. ARCHITECTURE.md describes these as future work.
+
+T06 deterministic guards and Jev semantic evaluation belong in src/aictrl/gateway/control.py after bounded native validation and before durable ALLOW/upstream, once for both providers. MCP should implement/reuse src/aictrl/gateway/protocols.py NativeProtocolHandler and shared control/event boundaries with MCP-specific native transport; AgentProtocol has no MCP wire variant yet, so T06 must make a coordinated contract decision. No guards, PII/secrets, Jev, MCP, budgets/rate limits, reload, dashboard or automatic response were implemented. No unresolved T05H blocker remains. T01–T05 and T05H are COMPLETE; T06 remains TODO and must not start automatically.
+
+
+### T05H file inventory
+
+Added (8):
+
+- `scripts/benchmark-gateway.py`
+- `src/aictrl/gateway/control.py`
+- `src/aictrl/gateway/protocols.py`
+- `src/aictrl/gateway/registry.py`
+- `src/aictrl/reporting/sink.py`
+- `src/aictrl/runtime/registry.py`
+- `tests/unit/test_architecture.py`
+- `tests/unit/test_gateway_benchmark.py`
+
+Modified (37):
+
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `Makefile`
+- `NOTES.md`
+- `OPEN_SOURCE.md`
+- `README.md`
+- `REUSE_DECISIONS.md`
+- `TASKS.md`
+- `config/policy.yaml`
+- `docker/compose.yaml`
+- `docker/images.lock.json`
+- `scripts/qualify-codex.py`
+- `scripts/verify-codex-boundary.py`
+- `scripts/verify-gateway-boundary.py`
+- `scripts/verify-runtime-boundary.py`
+- `src/aictrl/adapters/base.py`
+- `src/aictrl/adapters/claude.py`
+- `src/aictrl/adapters/codex.py`
+- `src/aictrl/adapters/demo.py`
+- `src/aictrl/gateway/anthropic.py`
+- `src/aictrl/gateway/app.py`
+- `src/aictrl/gateway/responses.py`
+- `src/aictrl/gateway/session.py`
+- `src/aictrl/policy/engine.py`
+- `src/aictrl/policy/loader.py`
+- `src/aictrl/policy/models.py`
+- `src/aictrl/reporting/store.py`
+- `src/aictrl/runtime/compose.py`
+- `src/aictrl/runtime/integration.py`
+- `src/aictrl/runtime/supervisor.py`
+- `tests/fixtures/gateway_factory.py`
+- `tests/unit/test_codex.py`
+- `tests/unit/test_gateway.py`
+- `tests/unit/test_gateway_runtime.py`
+- `tests/unit/test_policy.py`
+- `tests/unit/test_responses.py`
+- `tests/unit/test_runtime.py`
+
+Shared contracts, dependency lock and native/bootstrap/firewall/proxy/profile source were unchanged. Local audit, provider state, diagnostic benchmark artifacts and images were not published as repository files.
+
 ## T05 cleanup verified on 2026-10-03 — PASS
 
 The user explicitly authorized disabling only Codex's inner sandbox inside AICTRL's existing Docker boundary. The packaged docker/codex/aictrl.config.toml now contains sandbox_mode="danger-full-access", approval_policy="never" and web_search="disabled". No host Codex configuration, Docker capability/seccomp/AppArmor/namespace setting, firewall, mount, state lease, gateway, policy, contract or dependency changed. Official [container guidance](https://learn.chatgpt.com/docs/agent-approvals-security) and [configuration fields](https://learn.chatgpt.com/docs/config-file/config-reference) were checked, along with the pinned 0.159.3 native --help. AICTRL's external isolation remains the enforcement boundary for the untrusted agent and its tools.
