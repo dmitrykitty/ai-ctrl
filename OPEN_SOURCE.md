@@ -65,3 +65,20 @@ Version, source URLs, SHA-256 pins, license checksums and final locally built im
 The trusted runtime/protocol registries, independent native handlers, common ControlPipeline, policy schema 2 rules, EventSink contract, synthetic extension tests and local HTTP benchmark are new project code. They reuse the existing locked Python dependencies and standard-library SQLite; no plugin framework, ORM, distributed backend, judge or additional dependency was imported. Agent/native auth/bootstrap binaries and license notices are unchanged.
 
 `docker/compose.yaml` remains an adaptation of the attributed MIT agent-sandbox topology. T05H changes only the logical provider-state key to a generic external volume rendered from trusted adapter metadata; actual provider paths, private topology, privileges, limits and mount isolation are preserved. The changed gateway source was repackaged in the existing digest-pinned gateway image with hash-locked dependencies. Base, Claude, Codex and proxy images were reused; their upstream notices remain intact.
+
+## T06 SDK, recognizers and stateless packaging
+
+| Distribution / source | Exact version | License | Use |
+|---|---|---|---|
+| [Official MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) | `mcp==2.3.0`, `mcp-types==2.3.0` | MIT | Native low-level server and official Streamable HTTP client; transport/protocol implementation is reused, not hand-rolled |
+| [Presidio analyzer](https://github.com/data-privacy-stack/presidio) | `presidio-analyzer==2.2.364` | MIT | Selected email pattern, phone and Luhn card recognizers; no NLP engine or downloaded model |
+| [jsonschema](https://github.com/python-jsonschema/jsonschema) | `jsonschema==4.26.0` | MIT | Trusted tool argument-schema validation before dispatch |
+| [HTTPX2](https://github.com/pydantic/httpx2) | `httpx2==2.13.1` | BSD-3-Clause | Official MCP v2 transport dependency; existing HTTPX remains the native LLM/Jev client |
+| [python-phonenumbers](https://github.com/daviddrysdale/python-phonenumbers) | `phonenumbers==9.0.40` | Apache-2.0 | Presidio phone recognizer dependency |
+| [spaCy](https://github.com/explosion/spaCy) | `spacy==3.8.16` | MIT | Analyzer package's transitive library dependency only; no language model downloaded/instantiated |
+
+Direct dependency pins and all hashed transitive versions are in `pyproject.toml`/`uv.lock`. Installed distribution license notices remain in the gateway image. The demo installs only the frozen `demo` dependency group's MCP client closure, preserving its installed notices and the inherited agent-sandbox MIT license. No Presidio/NLP package is installed in the demo image. License/version statements were checked against installed distribution metadata.
+
+The new guard engine, Jev HTTP client, provenance extraction, bounded native output buffering, MCP control/backend/memory, stateless adapter/client and qualification/benchmark scripts are project code. The [TypeSafe OpenAPI schema](https://api.typesafe.ai/openapi.json) and [API documentation](https://docs.typesafe.ai/introduction) are protocol references; no vendor implementation or local model was copied. External TypeSafe service access is subject to its service terms, separate from dependency licenses.
+
+The already attributed `docker/base/entrypoint.sh` gains only an explicit runtime-only stateless demo path; `docker/demo/Dockerfile` copies the existing qualified firewall/readiness script onto the digest-pinned base. Native images are reused. `docker/proxy/destinations.py` is project code and now accepts an empty allowlist as deny-all without DNS. Its changed image retains the proxy/base MIT notices; no egress exception was added. Gateway, demo and this narrowly changed proxy were rebuilt; base/Claude/Codex binaries and license pins were preserved.

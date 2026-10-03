@@ -1,5 +1,13 @@
 # AI Control Layer — real-agent MVP
 
+## Approved T06 amendment
+
+The user-authorized T06 specification replaces the original local Ollama/LiteLLM semantic-classifier choice with external TypeSafe Jev. The implemented fixed route is `https://api.typesafe.ai/v1/systemone`, model alias `jev-latest`, with three `noul` questions in one request. Deterministic secrets BLOCK and PII redaction run before any external semantic call; only provenance-marked untrusted tool results/resources are semantic subjects. The API key is staged by the host into an ephemeral 0400 file and mounted read-only into the gateway alone. A missing key or provider error blocks semantic-required operations. No Ollama, LiteLLM, alternate provider or production mock is installed.
+
+The official pinned MCP Python SDK v2 supplies `/mcp` Streamable HTTP transport and the scripted stateless `demo-agent`; the gateway owns authorization and the synthetic protected memory. MCP events reuse the existing schema-1 `Channel.MCP` with `protocol=null`, so shared contracts do not change. Policy configuration migrates to schema 3/version `t06`. Native LLM forwarding retains its own protocols and guarded raw SSE units. These amendments supersede the corresponding reconnaissance choices below. T07 governance/reload and later reporting remain unimplemented; stop after T06 qualification.
+
+At T06 closure, the user explicitly accepted proceeding with working Claude/Jev/MCP and deferred Codex's unresolved real-provider output-inspection regression. T06 is complete under that amended acceptance; Codex remains unqualified for this milestone and must not be presented as working. The user will provide T07 separately. Preserve the deferred issue and evidence in NOTES.md/TASKS.md/docs/T06_REPORT.md; no automatic Codex retry or next milestone.
+
 ## 1. Product scope and reuse
 
 The MVP must run **Claude Code first**, with **Codex CLI as the second target and fallback**. A working real-agent integration is a release requirement.
@@ -33,10 +41,10 @@ Retain the other reconnaissance decisions:
 
 - FastAPI/Python modular monolith, SQLite, and a small server-rendered dashboard.
 - mitmproxy for enforcing generic egress.
-- LiteLLM SDK for local-model access; native protocol forwarding for real agents.
+- External TypeSafe Jev for semantic control; native protocol forwarding for real agents (approved T06 amendment).
 - MCP Python SDK for the tool gateway.
 - Presidio with selected recognizers and no downloaded NLP model.
-- Ollama with a preloaded small semantic classifier.
+- No local semantic-model service in T06.
 - Other researched gateways remain design references, avoiding additional service stacks.
 
 ## 2. Architecture and interfaces
@@ -63,7 +71,7 @@ class AgentAdapter(Protocol):
 
 | Adapter | Launch | Persistent state | Model protocol |
 |---|---|---|---|
-| `DemoAgentAdapter` | Controlled Python fixture | None | Local chat completions |
+| `DemoAgentAdapter` | Official SDK scripted security client | None | MCP Streamable HTTP; no LLM |
 | `ClaudeAdapter` | `claude` | `aictrl-claude-state` → `/home/dev/.claude` | Anthropic Messages |
 | `CodexAdapter` | `codex --no-daemon` | `aictrl-codex-state` → `/home/dev/.codex` | Responses API |
 
@@ -89,7 +97,7 @@ flowchart LR
     CLI[Host aictrl supervisor] --> Agent[Claude / Codex / demo-agent]
     Agent -->|LLM, MCP, company API| Gateway[Application-aware gateway]
     Agent -->|Other HTTP and HTTPS| Proxy[Enforcing egress proxy]
-    Gateway --> Providers[Model providers / Ollama]
+    Gateway --> Providers[Native model providers / TypeSafe Jev]
     Gateway --> Resources[Protected resources]
     Proxy --> Allowed[Allowed destinations]
     Gateway --> Events[SQLite events and budgets]
@@ -224,7 +232,7 @@ The complete policy also contains explicit model, tool, resource, destination, T
 - Keep ALLOW, BLOCK, REDACT, REQUIRE_APPROVAL, and AUDIT actions.
 - Filter MCP tool discovery and independently authorize calls.
 - Implement project versus private-memory namespace access.
-- Use deterministic secret/signature/PII checks first, followed by local semantic checks for relevant untrusted text.
+- Use deterministic secret/signature/PII checks first, followed by external Jev checks for relevant untrusted text (approved T06 amendment).
 - Reserve and settle budgets atomically in SQLite. Use fixed windows and simple counters across session, agent, user, and profile; defer distributed and rollover behavior.
 - Define “agent steps” as observable gateway/tool activity, not hidden model reasoning.
 - Keep approval handling to request binding, expiry, one-time use, and policy recheck at execution.
@@ -299,7 +307,7 @@ Browser approval UI, policy history, OpenTelemetry, advanced webhook delivery, d
 
 ## 4. Verification and demonstration
 
-`make prepare` downloads and pins images, Python dependencies, local models, and dashboard assets. `make test` runs the offline judge suite after documented preparation.
+`make prepare` downloads and pins runtime images and Python dependencies. T06 uses external Jev and has no local model download; dashboard preparation remains later work. `make test` runs the offline suite, including explicitly fake semantic providers, after documented preparation. Live Jev qualification is separately invoked with `make verify-jev`.
 
 | Area | Required scenarios |
 |---|---|
@@ -315,7 +323,7 @@ Browser approval UI, policy history, OpenTelemetry, advanced webhook delivery, d
 | Reporting | Audit, counters, risk contribution, alert threshold/cooldown, exports, and latency |
 | Recovery | Model unavailable, upstream failure, audit/budget failure, alert transport failure, legitimate traffic still permitted |
 
-Tests use deterministic provider/classifier fixtures, plus a separately identified local semantic-model smoke test included in `make test`. Native protocol tests use synthetic streams without paid services.
+Tests use explicitly deterministic provider/classifier fixtures with no live calls. The separate `make verify-jev` sends two fixed synthetic examples to the real external provider only when a host key is configured. Native protocol tests use synthetic streams without paid services.
 
 A separate `make verify-agents` performs live qualification against configured subscriptions. Submission requires a successful recorded run for at least one real agent. Offline tests passing alone cannot satisfy that requirement.
 

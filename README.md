@@ -1,6 +1,8 @@
 # AI Control Layer
 
-T01–T05 and the PRE-T06/T05H architecture checkpoint are complete. Real Claude Code 2.1.285 and Codex CLI 0.159.3 use saved subscription authentication through native application gateways, strict admission policy and durable SQLite events. Both use the shared Docker isolation and separate provider state. Codex's Responses path and real local read/write/tool-follow-up are qualified. See [verification](NOTES.md) and the approved [plan](plan.md).
+T01–T05/T05H are complete. T06 adds shared secret/PII guards, bounded native output inspection, external TypeSafe Jev and authorized MCP tools/protected memory. Real Claude Code 2.1.285 and Codex CLI 0.159.3 retain native subscription forwarding and isolated provider state. The stateless demo uses the same Docker boundary with no provider credentials or LLM. Current qualification and limitations are in the [T06 report](docs/T06_REPORT.md), [verification notes](NOTES.md) and approved [plan](plan.md).
+
+T06 is closed under the user's explicit acceptance of working Claude/Jev/MCP while deferring Codex. Claude's real exact-response test and the live Jev/MCP demo passed; 380 offline tests passed. Real Codex currently fails at output inspection with guard.output.invalid and does not complete the task. This regression remains deferred, with no automatic retry. T07 awaits the user's separate specification.
 
 ## Prepare and authenticate
 
@@ -34,6 +36,8 @@ The agent mounts exactly the selected workspace, dedicated provider state and re
 
 ## Run Codex
 
+These commands document the retained native setup. Its T05/T05H live proofs are historical; the current T06 output-inspection regression is unresolved and work on it is explicitly deferred. Use the qualified Claude path for current real-agent tasks.
+
 ```bash
 make codex-image
 make codex-version
@@ -44,7 +48,7 @@ aictrl run codex demo/project --prompt 'Reply with exactly: AICTRL_CODEX_OK' --t
 aictrl events --session <session-uuid>
 ```
 
-The live prompt command returned exactly `AICTRL_CODEX_OK`, exit 0, with a durable Responses ALLOW/completion pair after cleanup. The image downloads checksum-pinned official release binaries, including the required code-mode host and bubblewrap helper, on the existing trusted base. Qualification is Linux/amd64.
+The T05 live prompt command returned exactly `AICTRL_CODEX_OK`, exit 0, with a durable Responses ALLOW/completion pair after cleanup. The image downloads checksum-pinned official release binaries, including the required code-mode host and bubblewrap helper, on the existing trusted base. Qualification is Linux/amd64.
 
 Native `codex login --device-auth` uses only `aictrl-codex-state` at `/home/dev/.codex` through a separate auth.openai.com-only login proxy. Complete the native device flow in your browser. Status runs in a fresh container with network disabled and the same volume read-only; it emits only a safe authentication result. Repeated login exits 0 when authenticated. Authentication survives runtime cleanup and container recreation. Host `~/.codex` and browser/SSH credentials are never mounted; no OpenAI Platform API key is used. Concurrent Codex/authentication use is refused; Claude has a separate volume and lease.
 
@@ -54,7 +58,31 @@ The gateway admits only POST `/codex/responses` and forwards to fixed `https://c
 
 Codex's image profile sets `sandbox_mode="danger-full-access"`, `approval_policy="never"` and `web_search="disabled"`. This avoids creating a second sandbox inside the already isolated AICTRL container; Docker filesystem isolation, non-root IDs, capability drop, NNP, firewall, limits and gateway remain the enforcement boundary. The settings are packaged only in the container profile. This follows the [official container guidance](https://learn.chatgpt.com/docs/agent-approvals-security).
 
-The real task read `demo/project/demo_codex.txt`, created `codex-test.txt` with the same content and returned exactly `AICTRL_CODEX_TOOL_OK`, exit 0. Its two native Responses requests have paired durable ALLOW/completion events after cleanup. Focused probes confirmed absent host credentials/socket, unchanged non-root/capability boundary and blocked direct/proxy inference bypass. Web search is explicitly disabled. Codex prompt mode suppresses native stderr because it includes full input; final answers, exit status and safe gateway events remain visible. Local tool semantic authorization remains T06 work; T06 has not started.
+The T05 real task read `demo/project/demo_codex.txt`, created `codex-test.txt` with the same content and returned `AICTRL_CODEX_TOOL_OK`. T06 now guards returned native tool content before the next model request, including Jev inspection of untrusted results. Native local tools still execute inside Docker; independent pre-execution authorization is provided for MCP operations. Codex prompt mode suppresses native stderr because it includes full input; final answers, exit status and safe events remain visible.
+
+## Jev and the deterministic MCP demo
+
+```bash
+make demo-image
+make verify-demo-boundary
+make benchmark-guards
+```
+
+The Docker verifier explicitly injects an offline semantic fixture and a synthetic key to test protected mounts; it makes zero real Jev calls. Production uses only fixed `https://api.typesafe.ai/v1/systemone`, model `jev-latest`. To configure real semantic protection, set `AICTRL_JEV_API_KEY` in the host shell using silent input (Bash example):
+
+```bash
+read -rsp 'Jev API key: ' AICTRL_JEV_API_KEY
+printf '\n'
+export AICTRL_JEV_API_KEY
+make verify-jev
+.venv/bin/aictrl run demo-agent demo/project --timeout 90
+```
+
+Never put the key in the workspace, policy, tracked files, container environment or chat. The supervisor stages a 0400 key file in its private ephemeral directory and mounts it read-only into the gateway alone. Cleanup removes the staged file. `verify-jev` sends only two fixed synthetic examples and prints safe classifications/latency. No key means semantic-required operations fail closed; deterministic-only native requests still work, while the production demo reports PARTIAL with withheld results.
+
+The official MCP SDK v2 client performs filtered discovery, safe lookup, a guessed forbidden tool/counter check, contact redaction, secret blocking, allowed project memory, guessed private-memory denial and poisoned-result withholding. Protected memory is synthetic and gateway-local. The forbidden backend only has a counter; it never deletes anything. No real LLM is needed for the attack sequence. `T06 DEMO PASS` requires the safe results to pass semantic checks and the poisoned result to be blocked. The report distinguishes offline fixture PASS from live Jev qualification.
+
+Guards block stable secret signatures, redact EMAIL_ADDRESS/PHONE_NUMBER/CREDIT_CARD on input and block those entities on output. Jev receives only relevant untrusted text after deterministic privacy checks, with three probability questions in one request, default thresholds 0.85 and a 2.5-second deadline. This external service can receive residual unrecognized sensitive text; no local model or alternate semantic provider is used. Provider failures block.
 
 ## Repeatable Claude integration proof
 
@@ -94,9 +122,9 @@ Gateway decisions create durable SecurityEvents. Kernel-level rejected bypass is
 
 `config/project.yaml` selects `APPLICATION_GATEWAY`. Claude receives `ANTHROPIC_BASE_URL=http://gateway:8000/anthropic`, a supervisor-generated `X-AICtrl-Session` header, proxy settings and `NO_PROXY` for the gateway. No gateway API key, auth-token variable or apiKeyHelper is added, so saved subscription authentication remains native. This behavior was checked against [Claude gateway documentation](https://code.claude.com/docs/en/llm-gateway).
 
-The private gateway accepts POST `/anthropic/v1/messages` and `/anthropic/v1/messages/count_tokens`, forwarding to the corresponding paths on fixed `https://api.anthropic.com`. Queries, original body bytes, provider authorization, version/beta headers and relevant native client headers are preserved. Internal identity, caller Host and hop headers are stripped; outbound Host and length are generated correctly. SSE bytes, pings, event order, upstream statuses, errors and end-to-end response headers pass through incrementally. See the [native gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol).
+The private gateway accepts POST `/anthropic/v1/messages` and `/anthropic/v1/messages/count_tokens`, forwarding to fixed `https://api.anthropic.com`. Queries, safe original body bytes, provider authorization, version/beta and relevant native headers are preserved; an actual PII redaction rewrites selected JSON strings. Internal identity, caller Host and hop headers are stripped. Safe SSE units retain their original bytes/pings/order after inspection. See the [native gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol).
 
-`config/policy.yaml` uses configuration schema 2 and defaults to BLOCK. Enabled agents have exact rules for channel, direction, protocol, target, operations and ALLOW/BLOCK; a matching BLOCK wins regardless of rule order. Unknown fields/enums, empty operation lists, wildcard identifiers and duplicate rule IDs are rejected. Schema 1 policies must be migrated explicitly; shared session/event contracts remain schema 1. Missing/wrong/expired identity, unsupported routes, denied/disabled policy and invalid JSON cause no upstream action. Policy errors and admission-store failures fail closed. HTTPX uses one client per gateway, explicit limits/timeouts, no environment proxy inheritance, no POST retries and no redirect following.
+`config/policy.yaml` uses configuration schema 3/version `t06` and defaults to BLOCK. Enabled agents have exact channel/direction/protocol/target/operation rules; matching BLOCK wins regardless of order. Unknown fields/enums, empty operations, wildcard identifiers and duplicate IDs are rejected. Schemas 1/2 require explicit migration; shared contracts remain unchanged schema 1. Missing/wrong/duplicate/expired identity, unsupported routes, denied policy and invalid JSON cause no upstream action. Policy, guards and admission-store failures fail closed. Provider and Jev clients have explicit timeouts, no environment proxy inheritance, retries or redirects. Internal `/mcp` uses the same identity, policy, GuardEngine and durable EventSink.
 
 The generic proxy excludes each adapter's inference hosts in gateway mode, including duplicate authentication declarations or test pins. These are `api.anthropic.com` for Claude and `api.openai.com`/`chatgpt.com` for Codex. Declared authentication hosts remain available. `EGRESS_ONLY` remains an explicit trusted Claude alternative with destination-only opaque CONNECT and no application admission/audit; the Codex launcher requires `APPLICATION_GATEWAY`.
 
@@ -108,7 +136,7 @@ Events live at `.aictrl/audit/events.sqlite3`, outside the workspace, provider s
 
 Only safe attribution, operation/rule identifiers, decision, reason, policy version and timestamps are stored. Prompts, system/messages content, tool arguments, authorization headers, provider credentials and the internal token are never stored or logged by the control layer. Native provider state/history remains in its accepted dedicated volume. `aictrl events` displays these safe events.
 
-The gateway runs non-root with all capabilities dropped, no-new-privileges and a read-only root filesystem. It joins internal and upstream networks with no published host port. Its three production mounts are read-only session identity, read-only policy and writable audit storage. It has no selected workspace, provider state, Docker socket or CA private key. The host writes a minimal mode-0400 session file; comparison is constant-time, rejects duplicate identity headers and checks expiry. Cleanup removes that file and session resources while preserving audit, workspace and provider state.
+The gateway runs non-root with all capabilities dropped, no-new-privileges and a read-only root filesystem. It joins internal and upstream networks with no published host port. It mounts read-only session/policy and writable audit, plus the optional gateway-only read-only Jev key file. It has no workspace, provider state, socket or CA private key. The mode-0400 identity file is compared in constant time with duplicate/expiry checks. Cleanup removes ephemeral identity/key and resources while preserving audit, workspace and native provider state. The stateless demo mounts no provider volume and obtains no provider lease.
 
 ## Verification and limits
 
@@ -118,6 +146,9 @@ make test-fast
 make test
 make verify-gateway-boundary
 make verify-codex-boundary
+make verify-demo-boundary
+make verify-jev
+make benchmark-guards
 .venv/bin/python scripts/verify-codex-boundary.py --leases-only
 make compose-config
 ```
@@ -128,13 +159,13 @@ T05's one final offline suite passed 194 tests. Focused Codex Docker qualificati
 
 The subsequent T05 profile cleanup passed 13 targeted adapter/profile tests and 20 checks in one real local-tool session. It rebuilt only the Codex image; full offline and historical Docker matrices were not repeated for this small configuration change. The read/create-file/follow-up task now passes under the unchanged external boundary.
 
-T05H passed 227 offline tests, 47 Claude gateway Docker checks, 42 Codex checks and six provider lease checks. One real smoke per provider returned AICTRL_HARDENING_CLAUDE_OK / AICTRL_HARDENING_CODEX_OK with durable admission/completion after cleanup. No security boundary or native profile changed. T06 remains TODO.
+T05H passed 227 offline tests, 47 Claude gateway Docker checks, 42 Codex checks and six provider leases, plus one real smoke per provider. T06 results are recorded separately in the [milestone report](docs/T06_REPORT.md), including the external-provider prerequisites and any pending proof.
 
 Defaults remain 2 CPUs, 2048 MiB RAM, 256 PIDs and 600 seconds including preparation. `--timeout` only shortens the deadline. Host SIGINT/SIGTERM return 130/143, deadline 124, and ordinary exit is propagated. Cleanup preserves workspace and provider state.
 
-Gateway admission buffers a bounded request body (16 MiB maximum); response streams are not buffered in full. Claude completion records transport completion. Codex additionally recognizes complete native terminal SSE framing with a bounded 128-byte line prefix, so the client's close after response.completed still records completion and incomplete/error streams record failure. Independent native protocol handlers share one control pipeline and durable EventSink boundary; routing uses trusted protocol metadata. Payload bytes are relayed unchanged; usage and semantic output are not inspected. Auxiliary provider routes can be denied. Semantic/output guards, MCP authorization, budgets and dashboard remain later milestones; T06 awaits its instruction.
+Gateway admission buffers at most 16 MiB in RAM. Output waits for an Anthropic content block or Responses item, including complete tool arguments; interleaved items form an ordered group. Each unit/group is limited to 1 MiB and 30 seconds. Deterministic checks catch split secrets/PII before releasing that unit. Unsafe, malformed, compressed, oversized or incomplete output is withheld and audited as blocked; native terminal evidence is required for SSE completion. Earlier safe units cannot be recalled. Coverage is text and decoded JSON, not arbitrary encoded/binary/image content or values split across independently completed units. Usage accounting, approvals, budgets, reload, risk response and dashboard remain later work. Stop before T07.
 
-## Local gateway benchmark
+## Historical T05H gateway benchmark
 
 ```bash
 make benchmark-gateway
@@ -143,6 +174,8 @@ make benchmark-gateway
 This uses a deterministic local HTTP/SSE upstream with no provider or model traffic. It measures direct HTTP, complete gateway admission/stream/completion, policy decisions and durable SQLite appends at concurrency 1/10/50. Results include failures, p50/p95/p99 and successful requests/s and are saved to `.aictrl/benchmarks/latest.json`. Tests check correctness without timing thresholds.
 
 On the qualified Python 3.12.15/i7-10750H Linux host, 500 requests per sample produced gateway p50/p95/p99 of 10.492/11.707/13.553 ms at concurrency 1; direct HTTP was 2.029/3.005/3.354 ms. Gateway throughput was 94.263, 175.534 and 93.524 requests/s at 1/10/50, with zero failures in the final run. Durable append p50 was 2.461 ms versus policy 5.496 µs. Higher concurrency has substantial local scheduling/storage tails; these are synthetic application-layer measurements, not provider or enterprise capacity claims. Full results and limitations are in [architecture](ARCHITECTURE.md) and [notes](NOTES.md).
+
+These gateway numbers predate T06 guards. `make benchmark-guards` separately measured combined deterministic p50 of 0.379/3.228/10.285 ms for 1/10/32 KiB, with 200 samples per cohort. Fake-semantic timing is labelled separately and excludes external latency. See the T06 report for all percentiles and limitations.
 
 The current deployment keeps one agent/gateway/proxy/private network per session, a local Docker supervisor, SQLite and one lease per provider-state identity. Shared gateways, distributed identity and external event backends are future deployment work; current code boundaries prepare that work without implementing it.
 
