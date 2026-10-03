@@ -34,10 +34,13 @@ make verify-auth-boundary
 ## Authenticate Claude
 
 ```bash
+make claude-auth-status
 make claude-login
 ```
 
-Run this in an interactive terminal. Open the CLI's authorization URL in the host browser and complete the native subscription login. Enter any returned code only in that terminal. See [authentication instructions](docs/claude-authentication.md) for restrictions, state verification, and blockers.
+`make claude-auth-status` reports only whether native Claude considers the stored state authenticated. It runs offline as UID/GID 501, with all capabilities dropped and the dedicated volume mounted read-only. The helper exits 0 when authenticated, 1 when unauthenticated, and 2 on an operational error; `make` reports either nonzero result as a failure.
+
+`make claude-login` checks that state first. An authenticated state prints a short message and exits 0, including without an interactive terminal. An unauthenticated state starts the existing restricted login flow in an interactive terminal. Open the CLI's authorization URL in the host browser and complete the native subscription login. Enter any returned code only in that terminal. Status errors stop the command; they do not trigger a browser flow. See [authentication instructions](docs/claude-authentication.md) for restrictions and state verification.
 
 Claude state is `aictrl-claude-state` mounted at `/home/dev/.claude`. Provider authentication state can exist inside this dedicated agent state volume because the selected agent requires it. Enterprise resource credentials must never be placed there. Do not mount host Claude/Codex, SSH, AWS, or Kubernetes directories into containers. Login mounts no workspace and preserves the named volume when it exits. Only one active container may use this state volume.
 

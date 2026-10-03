@@ -1,4 +1,4 @@
-.PHONY: bootstrap prepare test doctor claude-image claude-version claude-login compose-config verify-auth-boundary verify-claude-state
+.PHONY: bootstrap prepare test doctor claude-image claude-version claude-auth-status claude-login compose-config verify-auth-boundary verify-claude-state
 
 bootstrap:
 	./scripts/bootstrap.sh
@@ -17,6 +17,9 @@ claude-image:
 
 claude-version:
 	docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges:true --user 501:501 --entrypoint claude aictrl-claude:2.1.285-t01 --version
+
+claude-auth-status:
+	bash ./scripts/claude-auth-status.sh
 
 claude-login:
 	./scripts/claude-login.sh

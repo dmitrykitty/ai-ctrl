@@ -2,6 +2,13 @@
 set -euo pipefail
 task_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$task_root"
+task_auth_status=0
+bash "$task_root/scripts/claude-auth-status.sh" || task_auth_status=$?
+case "$task_auth_status" in
+    0) exit 0 ;;
+    1) ;;
+    *) exit "$task_auth_status" ;;
+esac
 if [[ ! -t 0 || ! -t 1 ]]; then
     echo 'Claude login requires an interactive terminal: make claude-login' >&2
     exit 1

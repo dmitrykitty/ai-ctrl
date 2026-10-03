@@ -1,15 +1,18 @@
 # Native Claude subscription login
 
-The image contains actual Claude Code 2.1.285 installed with the [official native installer](https://code.claude.com/docs/en/setup). Login uses the native command `claude auth login --claudeai`. No custom OAuth bridge or API key is configured. The subscription is confirmed by the approved plan; the user's account authorization must still be completed in the native flow.
+The image contains actual Claude Code 2.1.285 installed with the [official native installer](https://code.claude.com/docs/en/setup). Login uses the native command `claude auth login --claudeai`. No custom OAuth bridge or API key is configured. The subscription is confirmed by the approved plan; account authorization uses the native flow.
 
 ```bash
 make claude-image
+make claude-auth-status
 make claude-login
 ```
 
-Use an interactive host terminal. Open the authorization URL printed by the CLI in your host browser. Follow the provider's sign-in/consent flow and enter any returned code only in that terminal. Do not put codes, tokens, or credentials in chat, project configuration, or platform logs. The command has a ten-minute timeout; rerun it if the flow expires. Cancellation preserves state and removes the temporary proxy/network containers.
+The status helper invokes native `claude auth status --json` and displays only its authenticated/unauthenticated result. Its offline, non-root container mounts the dedicated state read-only and drops all capabilities. It exits 0 when authenticated, 1 when unauthenticated, and 2 when the status cannot be checked. `make` turns either nonzero result into a failing target.
 
-The helper creates `aictrl-claude-state` and attaches it at `/home/dev/.claude`, with `CLAUDE_CONFIG_DIR` set to the same path. State is owned by container UID/GID 501 with directory mode 0700. It mounts no host home/configuration directory and no workspace. It refuses an active provider-state container; the fixed login container name also prevents concurrent login containers.
+Login checks that status first. Already-authenticated state returns success without a terminal or a browser flow. Only unauthenticated state proceeds to the existing restricted flow; a status error aborts. Use an interactive host terminal for new authentication. Open the authorization URL printed by the CLI in your host browser. Follow the provider's sign-in/consent flow and enter any returned code only in that terminal. Do not put codes, tokens, or credentials in chat, project configuration, or platform logs. The command has a ten-minute timeout; rerun it if the flow expires. Cancellation preserves state and removes the temporary proxy/network containers.
+
+The helpers use `aictrl-claude-state` at `/home/dev/.claude`, with `CLAUDE_CONFIG_DIR` set to the same path. State is owned by container UID/GID 501 with directory mode 0700. They mount no host home/configuration directory and no workspace. They refuse an active provider-state container; status and login share a fixed container name to prevent overlapping authentication operations.
 
 Provider authentication state can exist inside the dedicated agent state volume because the selected agent requires it. Enterprise resource credentials must never be placed there. The agent may access its own provider authentication/history. Ordinary shutdown does not delete that volume. Credential deletion is a separate explicit operation; no cleanup command here removes provider state.
 
@@ -31,14 +34,11 @@ Updates, optional traffic, and subscription MCP connectors are disabled. Login n
 
 ```bash
 make claude-version
+make claude-auth-status
 make verify-claude-state
 make verify-auth-boundary
-docker run --rm --network none --cap-drop ALL \
-  --security-opt no-new-privileges:true --user 501:501 \
-  --mount type=volume,source=aictrl-claude-state,target=/home/dev/.claude \
-  --entrypoint claude aictrl-claude:2.1.285-t01 auth status
 ```
 
-Stop an active provider-state container before these checks. `auth status` reports native login state; it does not perform a model request. A not-yet-authenticated status is a real blocker for T03, separate from T01 image and persistence verification. Do not inspect or print the credentials file to verify login.
+Stop an active provider-state container before these checks. The status helper reports native login state; it does not perform a model request or verify a live subscription response. A not-yet-authenticated status blocks real-agent integration, separate from T01 image and persistence verification. Do not inspect or print the credentials file to verify login.
 
 The Python/socket probes exercise the actual T01 authentication boundary. They are not evidence for the future real-agent integration checkpoint. T01 status and any observed browser/login blocker are recorded in `NOTES.md`.

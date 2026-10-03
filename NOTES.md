@@ -2,7 +2,7 @@
 
 Current milestone: T01
 
-Status: COMPLETE for the T01 foundation; native browser authentication is pending the user. The explicitly allowed interactive-login exception is recorded below. T02 remains TODO and requires the next instruction.
+Status: COMPLETE for the T01 foundation and cleanup. Native authentication now reports an authenticated stored state. T02 remains TODO until this cleanup is recorded; the user has authorized proceeding to the supplied T1/T02 instruction afterward.
 
 Working commands (from project root):
 - `make bootstrap` — local uv/Python bootstrap and frozen dependency synchronization.
@@ -12,18 +12,18 @@ Working commands (from project root):
 - `./scripts/uv.sh lock --check --offline` — lock agrees with `pyproject.toml`.
 - `.venv/bin/aictrl --help` — `doctor` and `run` commands available.
 - `make doctor` — all six checks OK: Python, Docker daemon 29.8.1, Compose 5.5.1, validated configuration, directories, Claude image.
-- `make test` — 33 passed on Python 3.12.15; includes a loopback socket test, with no external model/provider request.
+- `make test` — 40 passed on Python 3.12.15; includes a loopback socket test and safe authentication-status/error handling, with no external model/provider request.
 - `make compose-config` — runtime skeleton and authentication Compose files validate.
 - `make claude-image` — base and real Claude image built; actual `claude --version` returns `2.1.285 (Claude Code)`; state volume created and image identities recorded.
 - `make claude-version` — offline/non-root real CLI version check.
 - `make verify-claude-state` — named state survives two separate containers; directory owner 501:501; synthetic marker removed afterward.
 - `make verify-auth-boundary` — all ten actual Docker checks pass: non-root user, all capability sets dropped, no-new-privileges, provider CONNECT allowed, unrelated/private CONNECT denied, direct IPv4 denied, embedded DNS TCP/UDP denied, direct IPv6 denied. This tests authentication bootstrap, not the future runtime.
-- `make claude-login` — in an interactive terminal, native `claude auth login --claudeai` reaches the authorization URL and code prompt through the restricted proxy. User completion is still required.
+- `make claude-auth-status` — native Claude status reports authenticated; offline, non-root, all capabilities dropped, read-only dedicated state, boolean-only output.
+- `make claude-login` — two consecutive noninteractive calls returned 0 with `Claude is already authenticated.` and opened no new browser flow. Unauthenticated state uses the existing restricted native login flow; operational errors abort.
 
 Failing or incomplete commands:
 - `.venv/bin/aictrl run claude demo/project` — expected status 2: `runtime not implemented yet — milestone T02`; no container launched.
-- Native `claude auth status` — status 1 and `loggedIn: false`; no account authorization has been completed.
-- The login attempt was cancelled at its native browser/code prompt (native status 130, make status 2); temporary authentication containers/networks were removed and the state volume was preserved.
+- The original native status was unauthenticated and the first login attempt was cancelled at its browser/code prompt. That earlier browser-authentication exception is resolved: the new helper now reports authenticated. No live model response is claimed by this cleanup.
 - Assistant sandbox initially blocked Docker socket access and the unit test's localhost bind. Authorized execution outside that sandbox verified Docker and all 33 tests. These are resolved execution-environment restrictions, not broken project commands.
 
 Decisions:
@@ -42,14 +42,18 @@ Decisions:
 - Every copied/adapted upstream file and its MIT notice is recorded in `OPEN_SOURCE.md` and `REUSE_DECISIONS.md`.
 
 Known blockers:
-- The headless container cannot complete the user's browser sign-in/consent and code-entry step. Native login was started in the verified state volume and reached the supported authorization flow. Complete `make claude-login` in an interactive host terminal using the user's account. The image and state mount are verified; authentication is not faked. This is the permitted T01 login exception and blocks a real subscription response in T03 until resolved.
-- There are no remaining Python, dependency, image-build, Compose, or Docker-daemon blockers.
+- There are no remaining T01 cleanup, authentication-state, Python, dependency, image-build, Compose, or Docker-daemon blockers. A live subscription response remains separate runtime qualification.
 
 Follow-up verification (2026-10-03):
 - Standardized all project environment variables on the `AICTRL_` prefix, including the demo gateway URL and state probe. Updated bootstrap/firewall consumers, Compose producers, verification helpers, and README together.
 - Rebuilt both Docker images and reverified actual Claude Code 2.1.285. Updated the image identities above and in `docker/images.lock.json`.
 - All 33 offline tests, shell syntax checks, both Compose configurations, the `AICTRL_WORKSPACE` mount override, and the entrypoint's restricted auth/runtime responses passed.
 - A native login container was active, so the standard boundary helper correctly refused its shared configuration. Ran the existing ten boundary probes on a separate internal test network and the updated state helper with a temporary named volume; all passed. Only proxy addresses and test resource names were substituted for isolation. Test containers, networks, and volume were removed; the active login and provider state were preserved.
+
+Cleanup verification (2026-10-03):
+- Scanned the complete project source, scripts, Docker/Compose, tests, docs, Makefile, and examples; all project-owned environment variables use `AICTRL_`. Unrelated upstream identifiers are preserved.
+- Added `make claude-auth-status` and made login idempotent using the real dedicated volume. Native JSON and stderr are never echoed; only the authentication boolean or a safe error is displayed. No credential files were inspected or copied.
+- All 40 tests, shell syntax checks, both Compose configurations, original state-persistence helper, and all ten original Docker authentication-boundary probes pass. Authentication helpers left no running containers; the provider volume was preserved. T01 remains COMPLETE.
 
 Next-milestone requirements:
 - T02 must implement the host supervisor/lifecycle, actual enforcing runtime proxy, selected workspace permissions for UID 501, public CA export, and wall-clock enforcement. The prepared runtime entrypoint deliberately refuses to start an agent today.
