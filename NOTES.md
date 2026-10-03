@@ -1,62 +1,37 @@
 # Implementation notes
 
-Current milestone: T01
+T1 / repository T02 STATUS: PASS. T01 remains COMPLETE; T02 launcher and isolation COMPLETE. Next milestone: T03, native application gateway. The user requested closing T02 and moving onward; this record covers only the completed T02 scope.
 
-Status: COMPLETE for the T01 foundation and cleanup. Native authentication now reports an authenticated stored state. T02 remains TODO until this cleanup is recorded; the user has authorized proceeding to the supplied T1/T02 instruction afterward.
+## Verified on 2026-10-03
 
-Working commands (from project root):
-- `make bootstrap` — local uv/Python bootstrap and frozen dependency synchronization.
-- `./scripts/uv.sh --version` — uv 0.12.22.
-- `.venv/bin/python --version` — Python 3.12.15.
-- `./scripts/uv.sh sync --frozen --offline` — 29 installed packages checked; lock remains valid offline.
-- `./scripts/uv.sh lock --check --offline` — lock agrees with `pyproject.toml`.
-- `.venv/bin/aictrl --help` — `doctor` and `run` commands available.
-- `make doctor` — all six checks OK: Python, Docker daemon 29.8.1, Compose 5.5.1, validated configuration, directories, Claude image.
-- `make test` — 40 passed on Python 3.12.15; includes a loopback socket test and safe authentication-status/error handling, with no external model/provider request.
-- `make compose-config` — runtime skeleton and authentication Compose files validate.
-- `make claude-image` — base and real Claude image built; actual `claude --version` returns `2.1.285 (Claude Code)`; state volume created and image identities recorded.
-- `make claude-version` — offline/non-root real CLI version check.
-- `make verify-claude-state` — named state survives two separate containers; directory owner 501:501; synthetic marker removed afterward.
-- `make verify-auth-boundary` — all ten actual Docker checks pass: non-root user, all capability sets dropped, no-new-privileges, provider CONNECT allowed, unrelated/private CONNECT denied, direct IPv4 denied, embedded DNS TCP/UDP denied, direct IPv6 denied. This tests authentication bootstrap, not the future runtime.
-- `make claude-auth-status` — native Claude status reports authenticated; offline, non-root, all capabilities dropped, read-only dedicated state, boolean-only output.
-- `make claude-login` — two consecutive noninteractive calls returned 0 with `Claude is already authenticated.` and opened no new browser flow. Unauthenticated state uses the existing restricted native login flow; operational errors abort.
+- Actual Claude Code 2.1.285 starts interactively using `aictrl run claude demo/project`, displays `/workspace` and the existing subscription, and exits normally after native Ctrl+C. The workspace trust dialog remains a native decision.
+- Live controlled-egress smoke returned exactly `AICTRL_OK`, exit 0. This used transitional destination enforcement, not the future application-aware gateway.
+- Native status reports authenticated. Repeated `make claude-login` returns 0 without a browser flow. Named state survives container restart at UID/GID 1000:1000. Status uses read-only state, metadata-only owner selection and complete native privilege drop; native JSON/stderr are never echoed.
+- 87 offline tests passed with `make test`. Earlier `make test-fast` passed all then-current 85 tests; its two additional lifecycle/UI regressions are included in the final full-suite result. No additional test run is needed for documentation changes.
+- `make verify-runtime-boundary` passed 29 checks on each of two runs: host UID/GID, non-root, all capability sets zero, no-new-privileges, CPU/memory/PID limits, denied firewall mutation, workspace read/create/edit, writable dedicated state, absent host credentials/socket, public-only CA, actual native CLI, allowed HTTP/CONNECT, denied host/port/private destinations, direct IPv4, host/sibling, TCP/UDP DNS, UDP and IPv6 blocking.
+- The same real-runtime qualification verified normal cleanup twice, zero denied upstream/host/UDP hits, timeout 124, host SIGINT 130, SIGTERM 143, native exit 7 propagation, concurrent state rejection, proxy-loss fail-closed behavior, and partial infrastructure startup failure exit 2. No session-labelled containers/networks/volumes remained; synthetic fixture state was preserved until explicit fixture cleanup. Production provider state was never replaced by a synthetic test volume.
+- Both Compose configurations validate. Actual image/version and native authentication/state checks passed. The original ten Docker authentication-boundary checks passed during T01 cleanup; runtime qualification independently exercises the production T02 path.
+- All project-owned environment names use `AICTRL_`. No credentials, native auth file contents, or full model prompts were inspected/exported/logged. `plan.md` is unchanged.
 
-Failing or incomplete commands:
-- `.venv/bin/aictrl run claude demo/project` — expected status 2: `runtime not implemented yet — milestone T02`; no container launched.
-- The original native status was unauthenticated and the first login attempt was cancelled at its browser/code prompt. That earlier browser-authentication exception is resolved: the new helper now reports authenticated. No live model response is claimed by this cleanup.
-- Assistant sandbox initially blocked Docker socket access and the unit test's localhost bind. Authorized execution outside that sandbox verified Docker and all 33 tests. These are resolved execution-environment restrictions, not broken project commands.
+## Implementation decisions
 
-Decisions:
-- Starting state on 2026-10-03: only `plan.md`; no existing implementation or repository instructions. Preserve that file.
-- Use approved upstream commit `c5b65e7cbd8f5b3bbf4e3ea40900c0014eedfa04`.
-- Use one implementing agent, Python 3.12, minimal dependencies, and a configuration-oriented adapter boundary.
-- User explicitly authorized installing Python, uv, and required prerequisites.
-- Git was initialized on branch `main`; T01 is organized into six logical commits at the user's request. The configured origin is `https://github.com/dmitrykitty/ai-ctrl.git`; it was empty before this initial publication. The starting host Python 3.14.4 was retained; project Python is 3.12.15.
-- Six direct runtime dependencies plus pytest are locked with hashes in `uv.lock`. The build backend is hatchling 1.27.0.
-- Official base: Python 3.12.15 slim-bookworm, digest `sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3`; signed apt snapshot `20261002T000000Z`.
-- Actual CLI: Claude Code 2.1.285, installed through the checksum-pinned official installer with its mutable bootstrap lookup pinned to the requested target. The executable is promoted to a root-owned path; bootstrap PATH contains no agent-writable directories.
-- Observed local base identity: `sha256:6aa766403c933b40f83857e64ffac4ecd551a573bac5acc625623f5787247a20`.
-- Observed local Claude identity: `sha256:3753162762467711f5f4cde51d56942cce1bf26cc62f5e638f9e3c86fac8103f`. Local Docker RepoDigests are recorded in `docker/images.lock.json`; these images have not been published to a remote registry.
-- Provider state is only `aictrl-claude-state` → `/home/dev/.claude`; accepted provider-authentication exception is documented. No host agent, SSH, AWS, or Kubernetes directory was mounted.
-- Auth-only CONNECT transport uses end-to-end TLS and explicit destination-only coverage; native login command restriction and actual network enforcement prevent an unenforced agent launch. Runtime services and `aictrl run` remain explicit nonfunctional stubs until their milestones.
-- Every copied/adapted upstream file and its MIT notice is recorded in `OPEN_SOURCE.md` and `REUSE_DECISIONS.md`.
+- Supervisor uses per-session UUID names/labels, checked workspace paths, free internal subnet selection, safe Docker errors, engine-level state reservation, a single host deadline and owned-resource cleanup. Print input reaches the Docker workload over stdin rather than Docker arguments. Restrict/terminate hooks remain available for later milestones.
+- Runtime identity is host UID/GID (observed 1000:1000). Bootstrap prepares only container-owned home/provider state with no-follow ownership changes and suppresses usermod's implicit home traversal. No chmod/chown of the selected repository occurs. Native capability bounding/effective/permitted/inheritable/ambient sets are all zero. Setup-only DAC_OVERRIDE handles prior state ownership; KILL lets trusted Docker init forward signals across UID changes.
+- Native login does not itself complete the interactive onboarding preference. After host authentication preflight, bootstrap sets `hasCompletedOnboarding` in native configuration using a bounded, no-follow, non-root helper. This opens no credential file and preserves native workspace trust. Actual interactive startup then reached the conversation screen without a new browser login.
+- Runtime proxy is mitmproxy 12.2.3, adapted from approved agent-sandbox MIT enforcement/bootstrap assets. Static exact destination admission is the only T02 policy. Provider TLS is opaque CONNECT and receives destination/port enforcement only. Public CA is exported separately; private CA never enters the agent.
+- Defaults: 2 CPUs, 2048 MiB RAM, 256 PIDs, 600 seconds including preparation. Cleanup grace is bounded and preserves external provider state. Deadline/signal/normal-exit behavior was qualified on actual Docker, not mocked enforcement.
+- Shared serialized contracts remain schema 1. Routing mode is internal adapter/runtime configuration. No T03 application protocol gateway or policy/reporting implementation is included.
 
-Known blockers:
-- There are no remaining T01 cleanup, authentication-state, Python, dependency, image-build, Compose, or Docker-daemon blockers. A live subscription response remains separate runtime qualification.
+## Working commands and reproducibility
 
-Follow-up verification (2026-10-03):
-- Standardized all project environment variables on the `AICTRL_` prefix, including the demo gateway URL and state probe. Updated bootstrap/firewall consumers, Compose producers, verification helpers, and README together.
-- Rebuilt both Docker images and reverified actual Claude Code 2.1.285. Updated the image identities above and in `docker/images.lock.json`.
-- All 33 offline tests, shell syntax checks, both Compose configurations, the `AICTRL_WORKSPACE` mount override, and the entrypoint's restricted auth/runtime responses passed.
-- A native login container was active, so the standard boundary helper correctly refused its shared configuration. Ran the existing ten boundary probes on a separate internal test network and the updated state helper with a temporary named volume; all passed. Only proxy addresses and test resource names were substituted for isolation. Test containers, networks, and volume were removed; the active login and provider state were preserved.
+`make prepare`, `make doctor`, `.venv/bin/aictrl --help`, `make test`, `make test-fast`, `make compose-config`, `make claude-version`, `make claude-auth-status`, `make claude-login`, `make verify-claude-state`, `make verify-auth-boundary`, `make verify-runtime-boundary`, and `.venv/bin/aictrl run claude demo/project`.
 
-Cleanup verification (2026-10-03):
-- Scanned the complete project source, scripts, Docker/Compose, tests, docs, Makefile, and examples; all project-owned environment variables use `AICTRL_`. Unrelated upstream identifiers are preserved.
-- Added `make claude-auth-status` and made login idempotent using the real dedicated volume. Native JSON and stderr are never echoed; only the authentication boolean or a safe error is displayed. No credential files were inspected or copied.
-- All 40 tests, shell syntax checks, both Compose configurations, original state-persistence helper, and all ten original Docker authentication-boundary probes pass. Authentication helpers left no running containers; the provider volume was preserved. T01 remains COMPLETE.
+Python is 3.12.15, uv 0.12.22, Docker 29.8.1, Compose 5.5.1. Six runtime dependencies plus pytest remain frozen in `uv.lock`; offline synchronization/lock validation passed in T01. No host Python was replaced. Image installer/binary checksums, base digest, signed apt snapshot and actual local image IDs are in `docker/images.lock.json`.
 
-Next-milestone requirements:
-- T02 must implement the host supervisor/lifecycle, actual enforcing runtime proxy, selected workspace permissions for UID 501, public CA export, and wall-clock enforcement. The prepared runtime entrypoint deliberately refuses to start an agent today.
-- T03 must route native Anthropic streaming through the application gateway and establish policy/SQLite events. No model request or live agent qualification was attempted in T01.
+Current image identities: base `sha256:7b229dcd23ba00496574245973a8ef32a23aec99211b0db249d0e84bfacb1147`; Claude `sha256:d9c2de14b6c7eb90356de84139d4af04b7d80d2380f5034393bd4da866d9d6dd`; proxy `sha256:7fb53e47a53507de67008de4b0d3bf08e2585bee0582b223266d7c1c86f56a9f`. Images were built locally; no remote image publication is claimed.
 
-Next milestone: T02 — launcher and isolation; begin only after explicit instruction.
+## History and limitations
+
+T01 established packaging/contracts/adapters, pinned actual CLI assets and native isolated login. Cleanup standardized the environment prefix and added real idempotent authentication status; 40 offline tests and ten Docker authentication probes passed before T02. Authentication was completed by the user. T01 changes were split into logical commits and pushed to `main` at the user's request.
+
+Initial Docker access restrictions, an image-pull retry, state-owner bootstrap permissions, and the native onboarding screen were resolved. No remaining T02 blocker is known. Qualification is Linux/amd64 with cgroup v2 and a non-root host user. Credential/control workspaces, this control checkout's root, and root-host runtime identity are deliberately rejected. Provider availability is outside deterministic tests. TLS body inspection, central policy, durable audit, MCP authorization, guards, budgets and dashboard remain future milestones. Next: T03 native Anthropic Messages gateway, policy admission and SQLite events, following the approved plan.

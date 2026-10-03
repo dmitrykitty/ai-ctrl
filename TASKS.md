@@ -1,11 +1,11 @@
 # Implementation backlog
 
-Owner for every task: single implementing agent. Dependencies and acceptance follow `plan.md`. Only T01 is currently authorized.
+Owner for every task: single implementing agent. Dependencies and acceptance follow `plan.md` and the supplied T1/T02 instruction. T01 cleanup and T02 are complete. The user requested closing T02 and moving onward; T03 is next.
 
 | ID | Description | Dependencies | Status | Acceptance criteria | Affected modules |
 |---|---|---|---|---|---|
 | T01 | Contracts, reused assets, images, authentication | None | COMPLETE | Python 3.12.15/uv/lock ready; 40 offline tests and 10 real authentication-boundary probes pass; pinned actual Claude 2.1.285 verified; dedicated state persistence verified; native status reports authenticated; repeated login exits 0 without a new browser flow. Project environment prefix standardized; security boundary preserved. Coordination and MIT reuse records updated. | adapters, cli, contracts, docker, config, scripts, tests, docs |
-| T02 | Launcher and isolation | T01 | TODO | Real CLI starts via adapted Compose lifecycle; workspace and named state mounted; non-root workspace write permissions resolved; enforcing proxy reachable; setup privileges dropped; wall-clock limit enforced | runtime, cli, docker |
+| T02 | Launcher and isolation | T01 | COMPLETE | Actual Claude 2.1.285 starts interactively and returns AICTRL_OK through controlled egress; UID/GID 1000:1000, all capability sets zero, workspace read/create/edit verified; 87 offline tests and real runtime boundary/lifecycle probes pass; limits, default deny, state preservation, signals, timeout, concurrency and no-leak cleanup verified. Destination-only TLS coverage documented. | runtime, adapters, cli, docker, config, scripts, tests, docs |
 | T03 | First native gateway path | T02 | TODO | Claude subscription receives a real model response through gateway; policy and SQLite events work | gateway, policy, reporting |
 | T04 | Required integration proof | T03 | TODO | Allowed request succeeds, denied request and direct bypass fail; events identify real-agent session | runtime, gateway, reporting, tests |
 | T05 | Second adapter or fallback completion | T04 | TODO | Timeboxed Codex integration if Claude is healthy; otherwise complete selected real-agent path first | adapters, gateway, runtime |
