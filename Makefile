@@ -1,6 +1,10 @@
 .PHONY: bootstrap prepare test test-fast doctor claude-image runtime-image gateway-image proxy-image claude-version claude-auth-status claude-login compose-config verify-auth-boundary verify-claude-state verify-runtime-boundary verify-gateway-boundary
 .PHONY: codex-image codex-version codex-auth-status codex-login verify-codex-boundary
+.PHONY: benchmark-gateway
 .DEFAULT_GOAL := bootstrap
+
+benchmark-gateway:
+	./scripts/uv.sh run --frozen python scripts/benchmark-gateway.py --output .aictrl/benchmarks/latest.json
 
 verify-codex-boundary:
 	./scripts/uv.sh run --frozen python scripts/verify-codex-boundary.py
