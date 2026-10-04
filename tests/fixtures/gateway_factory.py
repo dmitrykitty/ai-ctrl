@@ -11,6 +11,7 @@ from aictrl.gateway.session import load_session
 from aictrl.policy.loader import load_policy
 from aictrl.reporting.store import EventStore
 from aictrl.guards.semantic import QUESTIONS, SemanticAssessment
+from aictrl.guards.threat_feed import load_feed
 
 
 class SyntheticSemanticProvider:
@@ -42,4 +43,7 @@ def application():
     return create_app(load_session(Path(os.environ['AICTRL_SESSION_FILE'])),
                       load_policy(Path(os.environ['AICTRL_POLICY_FILE'])),
                       EventStore(Path(os.environ['AICTRL_EVENTS_DB'])), client,
-                      semantic_provider=SyntheticSemanticProvider())
+                      semantic_provider=SyntheticSemanticProvider(),
+                      feed=load_feed(Path(os.environ['AICTRL_THREAT_FEED_FILE'])),
+                      policy_path=Path(os.environ['AICTRL_POLICY_FILE']),
+                      feed_path=Path(os.environ['AICTRL_THREAT_FEED_FILE']))

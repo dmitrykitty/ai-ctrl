@@ -72,7 +72,7 @@ class GatewayRuntime(StrictConfig):
 
 class ProjectConfig(StrictConfig):
     schema_version: Literal[1]
-    milestone: Literal["T01", "T02", "T03", "T04", "T05", "T06"]
+    milestone: Literal["T01", "T02", "T03", "T04", "T05", "T06", "T07"]
     claude: ClaudeRuntime
     codex: CodexRuntime | None = None
     demo: DemoRuntime | None = None

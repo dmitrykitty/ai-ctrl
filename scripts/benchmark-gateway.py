@@ -32,6 +32,8 @@ from aictrl.gateway.session import GatewaySession
 from aictrl.policy.engine import PolicyEngine
 from aictrl.policy.models import AdmissionRule, AgentPolicy, Policy
 from aictrl.reporting.store import EventStore
+from aictrl.governance.store import GovernanceStore
+from aictrl.policy.models import GovernanceSettings, RunawaySettings
 from aictrl.runtime.workspace import PROJECT_ROOT
 
 BODY = b'{"model":"local-synthetic","messages":[{"role":"user","content":"public benchmark"}],"stream":true}'
@@ -50,8 +52,9 @@ def percentiles(samples_ns: list[int]) -> dict[str, float]:
 def benchmark_policy() -> Policy:
     rule = AdmissionRule(id='benchmark.messages', channel='LLM', direction='OUTBOUND', protocol='ANTHROPIC_MESSAGES',
                          target='anthropic', operations=('messages',), action='ALLOW')
-    return Policy(schema_version=3, policy_version='local-benchmark', default_action='BLOCK',
-                  agents={'benchmark-agent': AgentPolicy(enabled=True, rules=(rule,))})
+    return Policy(schema_version=4, policy_version='local-benchmark', default_action='BLOCK',
+                  agents={'benchmark-agent': AgentPolicy(enabled=True, rules=(rule,))},
+                  governance=GovernanceSettings(runaway=RunawaySettings(max_agent_steps=100000, max_tool_calls=100000)))
 
 
 def microbenchmarks(root: Path, policy_iterations: int, sqlite_iterations: int) -> dict:
@@ -199,7 +202,7 @@ async def http_benchmark(root: Path, requests: int, concurrencies: tuple[int, ..
     async with serve_local(synthetic) as backend_port:
         async with httpx.AsyncClient(transport=LoopbackTransport(backend_port), trust_env=False,
                                     timeout=httpx.Timeout(connect=10, read=310, write=30, pool=10)) as upstream:
-            gateway = create_app(session, benchmark_policy(), timed_sink, upstream)
+            gateway = create_app(session, benchmark_policy(), timed_sink, upstream, governance_store=GovernanceStore(store.path))
             async with serve_local(gateway) as gateway_port:
                 for concurrency in concurrencies:
                     for kind, port, path, headers in (

@@ -97,7 +97,7 @@ def runtime(tmp_path, monkeypatch, *, pin=False):
     (project / 'config').mkdir(parents=True)
     (project / 'docker').mkdir()
     workspace.mkdir()
-    for file in ('config/policy.yaml', 'docker/compose.yaml'):
+    for file in ('config/policy.yaml', 'config/threat-feed.json', 'docker/compose.yaml'):
         (project / file).write_bytes((PROJECT_ROOT / file).read_bytes())
     settings = load_config(PROJECT_ROOT)
     if pin:

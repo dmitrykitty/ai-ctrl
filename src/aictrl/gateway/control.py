@@ -10,7 +10,7 @@ import httpx
 from fastapi import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
-from aictrl.contracts import ControlRequest, PolicyContext, SecurityEvent, DecisionAction
+from aictrl.contracts import ControlRequest, PolicyContext, SecurityEvent, DecisionAction, UsageMetric
 from aictrl.gateway.headers import HOP_BY_HOP, response_headers
 from aictrl.gateway.protocols import NativeProtocolHandler
 from aictrl.gateway.session import GatewaySession
@@ -22,6 +22,11 @@ from aictrl.gateway.output_diagnostics import UNPARSED, rejected_frame, transpor
 from aictrl.guards.engine import GuardEngine
 from aictrl.guards.models import apply_replacements
 from aictrl.gateway.audit import EventRecorder
+from aictrl.governance.admission import admit, GovernanceBlocked
+from aictrl.governance.approvals import request_digest
+from aictrl.governance.budgets import BudgetManager
+from aictrl.governance.reload import ConfigSnapshot, ConfigSnapshotManager
+from aictrl.governance.store import Reservation
 
 MAX_BODY = 16 * 1024 * 1024
 logger = logging.getLogger('aictrl.gateway')
@@ -33,11 +38,14 @@ class GatewayStreamFailure(RuntimeError):
 
 class ControlPipeline:
     def __init__(self, session: GatewaySession, engine: PolicyEngine, store: EventSink,
-                 client: httpx.AsyncClient, handler: NativeProtocolHandler, guards: GuardEngine | None = None) -> None:
+                 client: httpx.AsyncClient, handler: NativeProtocolHandler, guards: GuardEngine | None = None,
+                 *, snapshots: ConfigSnapshotManager | None = None, snapshot: ConfigSnapshot | None = None,
+                 governance: BudgetManager | None = None) -> None:
         self.session, self.engine, self.store, self.client = session, engine, store, client
         self.handler = handler
         self.guards = guards or GuardEngine(engine.policy.guards)
         self.audit = EventRecorder(session, engine.policy.policy_version, store)
+        self.snapshots, self.snapshot, self.governance = snapshots, snapshot, governance
 
     def event(self, request: ControlRequest, action: DecisionAction, reason: str,
               identifiers: tuple[str, ...] = ()) -> SecurityEvent:
@@ -48,10 +56,12 @@ class ControlPipeline:
         await self.audit.record(request, action, reason, identifiers)
 
     @staticmethod
-    def error(request: ControlRequest, status: int, message: str):
+    def error(request: ControlRequest, status: int, message: str, approval_id=None):
         kind = 'authentication_error' if status == 401 else 'permission_error' if status == 403 else 'api_error'
-        return JSONResponse({'type': 'error', 'error': {'type': kind, 'message': message},
-                             'request_id': str(request.request_id)}, status_code=status)
+        content = {'type': 'error', 'error': {'type': kind, 'message': message}, 'request_id': str(request.request_id)}
+        if approval_id is not None:
+            content['approval_id'] = str(approval_id)
+        return JSONResponse(content, status_code=status)
 
     async def block(self, request: ControlRequest, reason: str, status: int = 403,
                     identifiers: tuple[str, ...] = ()):
@@ -62,6 +72,13 @@ class ControlPipeline:
         return self.error(request, status, 'AICTRL request blocked.')
 
     async def handle(self, incoming: Request):
+        if self.snapshots is not None:
+            current = self.snapshots.capture()
+            # Each request/stream owns this reference, including audit version,
+            # output guards and settlement; reload affects only later requests.
+            worker = ControlPipeline(self.session, current.engine, self.store, self.client, self.handler,
+                                     current.guards, snapshot=current, governance=self.governance)
+            return await worker.handle(incoming)
         operation = self.handler.resolve_operation(incoming.method, incoming.url.path)
         control = ControlRequest(session_id=self.session.session_id, channel=self.handler.channel, direction=self.handler.direction,
                                  protocol=self.handler.protocol, inspection_level=self.handler.inspection_level,
@@ -78,7 +95,7 @@ class ControlPipeline:
             decision = self.engine.decide(context, control)
         except Exception:
             return await self.block(control, prefix + '.policy_error', 503)
-        if decision.action != DecisionAction.ALLOW:
+        if decision.action == DecisionAction.BLOCK:
             return await self.block(control, decision.reason_code)
         body = bytearray()
         try:
@@ -90,6 +107,7 @@ class ControlPipeline:
             if not self.handler.validate_payload(payload, operation):
                 raise ValueError('Invalid native body')
             inspection = self.handler.extract_inspection(payload)
+            digest = request_digest(context, control, {'body': payload, 'query': incoming.scope['query_string'].decode('ascii')})
         except (ValueError, UnicodeError, RecursionError, TypeError):
             return await self.block(control, prefix + '.invalid_body', 400)
         guarded = await self.guards.inspect_input(inspection)
@@ -101,10 +119,15 @@ class ControlPipeline:
                 apply_replacements(payload, guarded.replacements)
                 body = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
                 await self.record(control, DecisionAction.REDACT, 'guard.pii.redacted', guarded.identifiers)
-            # T07 budget reservation belongs here, before durable admission.
-            await self.record(control, DecisionAction.ALLOW, decision.reason_code)
+            # T07: exact approval + ALL claims commit together, then durable
+            # ALLOW and dispatch intent, before the sole provider send.
+            reservation = await admit(self.governance, self.snapshot, context, control, decision.action, self.audit,
+                                      digest=digest, token_reservation=self.handler.token_reservation(payload, self.engine.policy.governance))
+        except GovernanceBlocked as error:
+            return self.error(control, 403, error.reason, error.approval_id)
         except StoreFailure:
             return self.error(control, 503, 'AICTRL admission audit unavailable.')
+        usage = self.handler.new_usage_collector(operation)
         # Origin and path are trusted constants. The caller's query is data only.
         url = self.handler.build_upstream_url(operation, incoming.scope['query_string'])
         try:
@@ -116,8 +139,11 @@ class ControlPipeline:
                 outbound.headers.pop(name.decode(), None)
             upstream = await self.client.send(outbound, stream=True, follow_redirects=False)
         except httpx.HTTPError:
-            await self.final_record(control, prefix + '.upstream_failed')
+            await self.final_record(control, prefix + '.upstream_failed', reservation=reservation)
             return self.error(control, 502, 'AICTRL upstream unavailable.')
+        except asyncio.CancelledError:
+            await asyncio.shield(self.final_record(control, prefix + '.upstream_failed', reservation=reservation))
+            raise
 
         async def relay():
             reason = prefix + '.upstream_failed'
@@ -127,7 +153,7 @@ class ControlPipeline:
             try:
                 if upstream.headers.get('content-encoding', 'identity').lower() != 'identity':
                     raise OutputBlocked('guard.output.encoding')
-                async for chunk in self.inspect_stream(upstream):
+                async for chunk in self.inspect_stream(upstream, usage):
                     if observer is not None:
                         observer.observe(chunk)
                     yield chunk
@@ -160,14 +186,14 @@ class ControlPipeline:
                 try:
                     await upstream.aclose()
                 finally:
-                    await asyncio.shield(self.final_record(control, reason))
+                    await asyncio.shield(self.final_record(control, reason, usage=usage.metric(control), reservation=reservation))
 
         response = StreamingResponse(relay(), status_code=upstream.status_code)
         response.raw_headers = [(key, value) for key, value in response_headers(upstream.headers.raw)
                                 if key.lower() != b'content-length']
         return response
 
-    async def inspect_stream(self, upstream: httpx.Response):
+    async def inspect_stream(self, upstream: httpx.Response, usage=None):
         settings = self.guards.settings.output
         if upstream.headers.get('content-type', '').split(';', 1)[0].lower() == 'text/event-stream':
             buffer = self.handler.new_output_buffer(settings.max_bytes)
@@ -185,6 +211,8 @@ class ControlPipeline:
                     break
                 except TimeoutError:
                     raise OutputBlocked('guard.output.timeout') from None
+                if usage is not None:
+                    usage.observe(chunk)
                 for unit in buffer.feed(chunk):
                     guarded = await self.guards.inspect_output(unit.segments)
                     if guarded.action == DecisionAction.BLOCK:
@@ -212,6 +240,8 @@ class ControlPipeline:
                     stage = 'body.text_decode'
                     payload = body.decode('utf-8')
                 stage = 'body.guard'
+                if usage is not None and isinstance(payload, dict):
+                    usage.observe_json(payload)
                 guarded = await self.guards.inspect_output(output_segments(payload))
                 if guarded.action == DecisionAction.BLOCK:
                     raise OutputBlocked(guarded.reason_code, guarded.identifiers)
@@ -223,9 +253,19 @@ class ControlPipeline:
                     payload=payload, payload_bytes=len(body), label=None, stage=stage,
                     error=error, active_units=0)) from None
 
-    async def final_record(self, control: ControlRequest, reason: str) -> None:
+    async def final_record(self, control: ControlRequest, reason: str, *, usage: UsageMetric | None = None,
+                           reservation: Reservation | None = None) -> None:
+        if self.governance is not None and reservation is not None:
+            try:
+                await asyncio.to_thread(self.governance.store.settle, reservation, usage)
+            except StoreFailure:
+                logger.error('Governance settlement unavailable for session %s request %s', self.session.session_id, control.request_id)
+                try:
+                    await self.record(control, DecisionAction.BLOCK, 'governance.store_unavailable')
+                except StoreFailure:
+                    pass
         try:
-            await self.record(control, DecisionAction.AUDIT, reason)
+            await self.audit.record(control, DecisionAction.AUDIT, reason, usage=usage)
         except StoreFailure:
             # Already-delivered bytes cannot be recalled. No raw exception/data.
             logger.error('Completion audit unavailable for session %s request %s', self.session.session_id, control.request_id)

@@ -61,7 +61,7 @@ class ThirdAdapter:
 def third_policy():
     rule = AdmissionRule(id='third.responses', channel='LLM', direction='OUTBOUND', protocol='RESPONSES',
                          target='openai', operations=('responses',), action='ALLOW')
-    return Policy(schema_version=3, policy_version='synthetic-extension', default_action='BLOCK',
+    return Policy(schema_version=4, policy_version='synthetic-extension', default_action='BLOCK',
                   agents={'synthetic-third': AgentPolicy(enabled=True, rules=(rule,))})
 
 
@@ -72,6 +72,7 @@ def test_trusted_third_adapter_uses_one_identity_config_and_existing_pipeline(tm
     workspace.mkdir()
     (project / 'docker/compose.yaml').write_bytes((PROJECT_ROOT / 'docker/compose.yaml').read_bytes())
     (project / 'config/policy.yaml').write_text(third_policy().model_dump_json())
+    (project / 'config/threat-feed.json').write_bytes((PROJECT_ROOT / 'config/threat-feed.json').read_bytes())
     settings = load_config(PROJECT_ROOT)
     monkeypatch.setattr(supervisor, 'load_config', lambda root: settings)
     spec = registry.RuntimeAgentSpec(ThirdAdapter, lambda config: SimpleNamespace(image='synthetic-prepared-image'),
@@ -217,7 +218,8 @@ def test_non_sqlite_sink_controls_admission_and_completion(tmp_path):
         return httpx.Response(200, stream=Frames(), headers={'content-type':'text/event-stream'})
     async def proof():
         async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
-            app = create_app(session, native_policy(), sink, client)
+            from aictrl.governance.store import GovernanceStore
+            app = create_app(session, native_policy(), sink, client, governance_store=GovernanceStore(tmp_path / 'governance.sqlite3'))
             assert (await invoke(app, client)).status_code == 200
             assert [event.action for event in sink.events] == ['ALLOW', 'AUDIT']
             sink.fail = True

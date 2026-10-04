@@ -23,6 +23,7 @@ from aictrl.runtime.workspace import PROJECT_ROOT, validate_workspace
 from aictrl.runtime.registry import resolve_agent
 from aictrl.policy.loader import load_policy
 from aictrl.runtime.secrets import stage_jev_key
+from aictrl.guards.threat_feed import load_feed
 
 
 @dataclass
@@ -97,7 +98,11 @@ class RuntimeSupervisor:
         self._docker(['image', 'inspect', self.settings.runtime.proxy_image, '--format', '{{.Id}}'])
         if self.gateway_mode:
             self._docker(['image', 'inspect', self.settings.gateway.image, '--format', '{{.Id}}'])
-            load_policy(self.project / 'config/policy.yaml')
+            config = self.project / 'config'
+            if config.is_symlink() or any((config / name).is_symlink() for name in ('policy.yaml', 'threat-feed.json')):
+                raise RuntimeFailure('Gateway configuration must stay in its protected control directory.')
+            load_policy(config / 'policy.yaml')
+            load_feed(config / 'threat-feed.json')
             raw_audit = self.project / self.settings.gateway.audit_directory
             audit = raw_audit.resolve()
             if raw_audit.is_symlink() or audit != self.project.resolve() / self.settings.gateway.audit_directory or self.workspace == audit or self.workspace in audit.parents:

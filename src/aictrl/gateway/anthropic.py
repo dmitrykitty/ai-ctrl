@@ -9,6 +9,7 @@ from aictrl.gateway.headers import request_headers
 from aictrl.gateway.inspection import text_content
 from aictrl.guards.models import InspectionSegment, Source
 from aictrl.gateway.sse import AnthropicTerminal
+from aictrl.gateway.usage import AnthropicUsage, requested_reservation
 
 UPSTREAM = 'https://api.anthropic.com'
 PATHS = MappingProxyType({'/anthropic/v1/messages': 'messages',
@@ -53,3 +54,8 @@ class AnthropicMessagesHandler:
         return AnthropicOutputBuffer(max_bytes)
 
     new_stream_observer = staticmethod(AnthropicTerminal)
+    new_usage_collector = staticmethod(AnthropicUsage)
+
+    @staticmethod
+    def token_reservation(payload: dict, settings) -> int:
+        return requested_reservation(payload, 'max_tokens', settings.token_reservation, settings.input_token_allowance)

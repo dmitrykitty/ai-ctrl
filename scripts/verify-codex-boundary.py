@@ -89,7 +89,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='aictrl-codex-qualification-') as directory:
             root = Path(directory); project, workspace = root/'control', root/'workspace'
             (project/'config').mkdir(parents=True); (project/'docker').mkdir(); workspace.mkdir(mode=0o750)
-            for file in ('config/policy.yaml','docker/compose.yaml'):
+            for file in ('config/policy.yaml','config/threat-feed.json','docker/compose.yaml'):
                 shutil.copyfile(PROJECT_ROOT/file, project/file)
             shutil.copyfile(PROJECT_ROOT/'tests/fixtures/codex_probe.py',workspace/'codex_probe.py')
             (workspace/'input.txt').write_text('host workspace\n')

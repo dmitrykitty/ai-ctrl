@@ -1,5 +1,5 @@
 schema_version: 1
-milestone: T06
+milestone: T07
 claude:
   image: aictrl-claude:2.1.285-t03
   state_volume: aictrl-claude-state
@@ -20,7 +20,7 @@ runtime:
   routing_mode: APPLICATION_GATEWAY
   test_destinations: []
 gateway:
-  image: aictrl-gateway:t06
+  image: aictrl-gateway:t07
   audit_directory: .aictrl/audit
 demo:
-  image: aictrl-demo:t06
+  image: aictrl-demo:t07

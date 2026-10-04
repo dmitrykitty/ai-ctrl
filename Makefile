@@ -3,6 +3,13 @@
 .PHONY: benchmark-gateway
 .DEFAULT_GOAL := bootstrap
 
+.PHONY: verify-governance verify-governance-demo
+verify-governance:
+	./scripts/uv.sh run --frozen python scripts/verify-governance.py
+
+verify-governance-demo:
+	./scripts/uv.sh run --frozen python scripts/verify-governance-demo.py
+
 .PHONY: demo-image verify-demo-boundary benchmark-guards verify-jev
 demo-image:
 	bash ./scripts/demo-image.sh

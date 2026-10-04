@@ -1,5 +1,5 @@
-schema_version: 3
-policy_version: t06
+schema_version: 4
+policy_version: t07
 default_action: BLOCK
 agents:
   claude:
@@ -37,8 +37,27 @@ agents:
         direction: OUTBOUND
         protocol: null
         target: demo-mcp
-        operations: [tool.destructive_delete_all, resource.private.read]
+        operations: [resource.private.read]
         action: BLOCK
+      - id: demo.mcp-approval
+        channel: MCP
+        direction: OUTBOUND
+        protocol: null
+        target: demo-mcp
+        operations: [tool.destructive_delete_all]
+        action: REQUIRE_APPROVAL
+governance:
+  approval_ttl_seconds: 60
+  token_reservation: 8192
+  input_token_allowance: 4096
+  budgets:
+    - {id: session.requests, scope: session, dimension: requests, limit: 60, window_seconds: 60}
+    - {id: session.tool-calls, scope: session, dimension: tool_calls, limit: 40, window_seconds: 600}
+    - {id: session.steps, scope: session, dimension: agent_steps, limit: 60, window_seconds: 600}
+    - {id: user.tokens, scope: user, dimension: tokens, limit: 256000, window_seconds: 3600}
+  runaway:
+    max_agent_steps: 60
+    max_tool_calls: 40
 guards:
   secrets:
     enabled: true

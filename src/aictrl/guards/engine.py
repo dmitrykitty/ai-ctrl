@@ -5,12 +5,13 @@ from dataclasses import replace
 import math
 from time import perf_counter_ns
 
-from aictrl.contracts import DecisionAction, GuardResult, Severity
+from aictrl.contracts import Channel, DecisionAction, GuardResult, Severity
 from aictrl.guards.models import GuardEvaluation, InspectionSegment, Replacement, aggregate
 from aictrl.guards.pii import PiiGuard
 from aictrl.guards.secrets import SecretGuard
 from aictrl.guards.semantic import QUESTIONS, SemanticDecisionProvider
 from aictrl.policy.models import GuardSettings
+from aictrl.guards.threat_feed import ThreatFeed, ThreatFeedGuard
 
 
 def result(guard: str, action: DecisionAction, reason: str, start: int,
@@ -21,18 +22,21 @@ def result(guard: str, action: DecisionAction, reason: str, start: int,
 
 
 class GuardEngine:
-    def __init__(self, settings: GuardSettings, semantic: SemanticDecisionProvider | None = None) -> None:
+    def __init__(self, settings: GuardSettings, semantic: SemanticDecisionProvider | None = None,
+                 *, feed: ThreatFeed | None = None) -> None:
         self.settings, self.semantic = settings, semantic
         self.secrets = SecretGuard()
         self.pii = PiiGuard(settings.pii.entities)
+        self.threats = ThreatFeedGuard(feed or ThreatFeed())
 
-    async def inspect_input(self, segments: tuple[InspectionSegment, ...]) -> GuardEvaluation:
-        return await self._inspect(segments, output=False, semantic=True)
+    async def inspect_input(self, segments: tuple[InspectionSegment, ...], *, channel: Channel = Channel.LLM) -> GuardEvaluation:
+        return await self._inspect(segments, output=False, semantic=True, channel=channel)
 
-    async def inspect_output(self, segments: tuple[InspectionSegment, ...], *, semantic: bool = False) -> GuardEvaluation:
-        return await self._inspect(segments, output=True, semantic=semantic)
+    async def inspect_output(self, segments: tuple[InspectionSegment, ...], *, semantic: bool = False,
+                             channel: Channel = Channel.LLM) -> GuardEvaluation:
+        return await self._inspect(segments, output=True, semantic=semantic, channel=channel)
 
-    async def _inspect(self, segments: tuple[InspectionSegment, ...], *, output: bool, semantic: bool) -> GuardEvaluation:
+    async def _inspect(self, segments: tuple[InspectionSegment, ...], *, output: bool, semantic: bool, channel: Channel) -> GuardEvaluation:
         results: list[GuardResult] = []
         start = perf_counter_ns()
         signatures = tuple(dict.fromkeys(signature for text in (
@@ -47,10 +51,12 @@ class GuardEngine:
         semantic_segments: list[InspectionSegment] = []
         entities: set[str] = set()
         immutable_pii = False
+        deterministic_texts = []
         for segment in segments:
             findings = self.pii.scan(segment.text) if self.settings.pii.enabled else ()
             entities.update(f.entity for f in findings)
             redacted = self.pii.redact(segment.text, findings)
+            deterministic_texts.append(redacted)
             if findings:
                 immutable_pii |= not segment.mutable
                 replacements.append(Replacement(segment.json_path, redacted))
@@ -61,6 +67,12 @@ class GuardEngine:
                               ('guard.pii.output_blocked' if output else 'guard.pii.input_immutable') if pii_action == DecisionAction.BLOCK else 'guard.pii.redacted' if entities else 'guard.pii.safe', start,
                               tuple('pii.' + entity.lower() for entity in sorted(entities))))
         if pii_action == DecisionAction.BLOCK:
+            return GuardEvaluation(DecisionAction.BLOCK, tuple(results))
+        start = perf_counter_ns()
+        threats = tuple(dict.fromkeys(signature for text in (*deterministic_texts, ''.join(deterministic_texts))
+                                     for signature in self.threats.scan(text, channel)))
+        if threats:
+            results.append(result('guard.threat_feed', DecisionAction.BLOCK, 'guard.threat_feed.detected', start, threats))
             return GuardEvaluation(DecisionAction.BLOCK, tuple(results))
         if semantic and self.settings.semantic.enabled and semantic_segments:
             start = perf_counter_ns()

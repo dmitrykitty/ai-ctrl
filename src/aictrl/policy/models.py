@@ -1,8 +1,9 @@
-"""Strict exact rules and bounded guards. Configuration schema 3."""
+"""Strict configuration only. Enforcement belongs to control/governance."""
 
 from typing import Literal
+from types import MappingProxyType
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
 from aictrl.contracts import AgentProtocol, Channel, Direction, Identifier, InspectionLevel
 
@@ -18,7 +19,7 @@ class AdmissionRule(PolicyModel):
     protocol: AgentProtocol | None = Field(strict=False)
     target: Identifier
     operations: tuple[Identifier, ...] = Field(min_length=1, strict=False)
-    action: Literal['ALLOW', 'BLOCK']
+    action: Literal['ALLOW', 'BLOCK', 'REQUIRE_APPROVAL']
     inspection_level: InspectionLevel = Field(default=InspectionLevel.STRUCTURED, strict=False)
 
 
@@ -76,16 +77,51 @@ class GuardSettings(PolicyModel):
         return self
 
 
+class BudgetRule(PolicyModel):
+    id: Identifier
+    scope: Literal['session', 'agent', 'user', 'profile']
+    dimension: Literal['requests', 'tokens', 'tool_calls', 'agent_steps']
+    limit: int = Field(gt=0, le=1_000_000_000)
+    window_seconds: int = Field(ge=1, le=86400)
+
+
+class RunawaySettings(PolicyModel):
+    max_agent_steps: int = Field(default=60, ge=1, le=100000)
+    max_tool_calls: int = Field(default=40, ge=1, le=100000)
+
+
+class GovernanceSettings(PolicyModel):
+    approval_ttl_seconds: int = Field(default=60, ge=1, le=3600)
+    token_reservation: int = Field(default=8192, ge=1, le=10_000_000)
+    input_token_allowance: int = Field(default=4096, ge=1, le=10_000_000)
+    budgets: tuple[BudgetRule, ...] = Field(default=(), max_length=128, strict=False)
+    runaway: RunawaySettings = Field(default_factory=RunawaySettings)
+
+    @model_validator(mode='after')
+    def unique_ids(self):
+        ids = [rule.id for rule in self.budgets]
+        if len(ids) != len(set(ids)) or any(id.startswith('runaway.') for id in ids):
+            raise ValueError('Budget IDs must be unique; runaway namespace is reserved.')
+        return self
+
+
 class Policy(PolicyModel):
-    schema_version: Literal[3]
+    schema_version: Literal[4]
     policy_version: Identifier
     default_action: Literal['BLOCK']
     agents: dict[Identifier, AgentPolicy] = Field(default_factory=dict)
     guards: GuardSettings = Field(default_factory=GuardSettings)
+    governance: GovernanceSettings = Field(default_factory=GovernanceSettings)
 
     @model_validator(mode='after')
     def unique_rule_ids(self):
         identifiers = [rule.id for agent in self.agents.values() for rule in agent.rules]
+        identifiers += [rule.id for rule in self.governance.budgets]
         if len(identifiers) != len(set(identifiers)):
             raise ValueError('Policy rule IDs must be globally unique.')
+        object.__setattr__(self, 'agents', MappingProxyType(dict(self.agents)))
         return self
+
+    @field_serializer('agents')
+    def serialize_agents(self, agents):
+        return dict(agents)

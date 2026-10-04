@@ -25,7 +25,7 @@ def main():
             (project/'config').mkdir(parents=True)
             (project/'docker').mkdir()
             workspace.mkdir()
-            for file in ('config/policy.yaml','docker/compose.yaml'):
+            for file in ('config/policy.yaml','config/threat-feed.json','docker/compose.yaml'):
                 shutil.copyfile(PROJECT_ROOT/file,project/file)
             shutil.copyfile(PROJECT_ROOT/'tests/fixtures/demo_probe.py',workspace/'demo_probe.py')
             settings=load_config(PROJECT_ROOT)
@@ -55,7 +55,7 @@ def main():
             boundary=next((line for line in output.splitlines() if line.startswith('AICTRL_DEMO_BOUNDARY ')),None)
             assert boundary is not None,'Demo boundary output unavailable.'
             checks.update(json.loads(boundary.split(' ',1)[1]))
-            checks['official_sdk_attack_demo_pass']=code==0 and 'T06 DEMO PASS' in output
+            checks['official_sdk_attack_demo_pass']=code==0 and 'T07 GUARDS DEMO PASS' in output
             checks['ephemeral_key_and_identity_removed']=not ephemeral.exists()
             for resource in ('container','network','volume'):
                 args=['ps','--all','--quiet'] if resource=='container' else [resource,'ls','--quiet']
@@ -65,8 +65,8 @@ def main():
             checks['mcp_attribution']=all(event.agent_id==event.adapter=='demo-agent' and event.channel=='MCP' and event.protocol is None for event in events)
             raw=(project/'.aictrl/audit/events.sqlite3').read_bytes()
             checks['audit_has_no_raw_content']=all(secret not in raw for secret in (b'AICTRL_SECRET_demo',b'user@example.com',b'Ignore previous instructions',b'AICTRL_PRIVATE_MEMORY_SYNTHETIC',b'synthetic_jev_key_boundary_only'))
-            print('T06 Docker qualification: explicit offline semantic fixture; zero live Jev calls.',flush=True)
-            print('AICTRL_T06_DEMO_DOCKER '+json.dumps(checks,sort_keys=True),flush=True)
+            print('T07 Docker guards/boundary qualification: explicit offline semantic fixture; zero live Jev calls.',flush=True)
+            print('AICTRL_T07_DEMO_DOCKER '+json.dumps(checks,sort_keys=True),flush=True)
             assert all(checks.values()),'Demo Docker qualification failed.'
     finally:
         if current is not None: current.close()

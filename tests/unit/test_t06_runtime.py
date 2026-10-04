@@ -18,7 +18,7 @@ def runtime(tmp_path,monkeypatch,*,demo=False):
     (project/'docker').mkdir()
     workspace=tmp_path/'workspace'
     workspace.mkdir()
-    for file in ('config/policy.yaml','docker/compose.yaml'):
+    for file in ('config/policy.yaml','config/threat-feed.json','docker/compose.yaml'):
         (project/file).write_bytes((PROJECT_ROOT/file).read_bytes())
     settings=load_config(PROJECT_ROOT)
     if demo: adapter=DemoAgentAdapter(settings.demo.image)

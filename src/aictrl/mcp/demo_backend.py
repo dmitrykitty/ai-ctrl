@@ -24,7 +24,9 @@ class DemoMCPBackend:
                            {'type': 'object', 'properties': {'contact': {'type': 'string', 'maxLength': 32768}},
                             'required': ['contact'], 'additionalProperties': False}, 'tool.echo_contact'),
             ToolDefinition('poisoned_document', 'Synthetic indirect injection fixture.', EMPTY_SCHEMA, 'tool.poisoned_document'),
-            ToolDefinition('destructive_delete_all', 'Forbidden synthetic sentinel; never deletes files.', EMPTY_SCHEMA, 'tool.destructive_delete_all'),
+            ToolDefinition('destructive_delete_all', 'Requires host approval. Synthetic counter only; never deletes files.',
+                           {'type': 'object', 'properties': {'confirmation': {'type': 'string', 'maxLength': 64}},
+                            'additionalProperties': False}, 'tool.destructive_delete_all'),
         )
 
     def list_resources(self) -> tuple[ResourceDefinition, ...]:

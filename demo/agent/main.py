@@ -11,7 +11,7 @@ from mcp.shared.exceptions import MCPError
 
 
 async def demonstrate() -> int:
-    print('AICTRL T06 security demo (scripted MCP client)', flush=True)
+    print('AICTRL T07 guards and authorization demo (scripted MCP client)', flush=True)
     failures = 0
     pending = False
     def check(label: str, passed: bool) -> None:
@@ -24,9 +24,9 @@ async def demonstrate() -> int:
         async with Client(streamable_http_client(url, http_client=http), cache=None, read_timeout_seconds=15) as client:
             tools = {tool.name for tool in (await client.list_tools()).tools}
             check('Allowed MCP tools visible', {'safe_lookup', 'echo_contact', 'poisoned_document'} <= tools)
-            check('Forbidden destructive tool hidden', 'destructive_delete_all' not in tools)
+            check('Approval-required destructive sentinel visible', 'destructive_delete_all' in tools)
             forbidden = await client.call_tool('destructive_delete_all', {})
-            check('Guessed destructive tool independently blocked', forbidden.is_error)
+            check('Destructive sentinel requires exact host approval', forbidden.is_error and 'governance.approval.required' in str(forbidden))
             safe = await client.call_tool('safe_lookup', {})
             pending |= safe.is_error and 'guard.semantic.unavailable' in str(safe)
             if not pending:
@@ -59,13 +59,13 @@ async def demonstrate() -> int:
                 check('Poisoned tool result blocked by semantic guard', poisoned.is_error and 'guard.semantic.' in str(poisoned))
                 check('Poisoned text withheld', 'Ignore previous instructions' not in str(poisoned))
     if failures:
-        print('T06 DEMO FAIL', flush=True)
+        print('T07 GUARDS DEMO FAIL', flush=True)
         return 1
     if pending:
         print('[PENDING] Semantic provider unavailable; required results were withheld.', flush=True)
-        print('T06 DEMO PARTIAL', flush=True)
+        print('T07 GUARDS DEMO PARTIAL', flush=True)
         return 2
-    print('T06 DEMO PASS', flush=True)
+    print('T07 GUARDS DEMO PASS', flush=True)
     return 0
 
 
@@ -74,6 +74,6 @@ if __name__ == '__main__':
     try:
         status = asyncio.run(demonstrate())
     except Exception:
-        print('T06 DEMO FAIL: MCP control unavailable.', flush=True)
+        print('T07 GUARDS DEMO FAIL: MCP control unavailable.', flush=True)
         status = 1
     raise SystemExit(status)

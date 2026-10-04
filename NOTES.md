@@ -1,5 +1,58 @@
 # Implementation notes
 
+## T07 checkpoint — 2026-10-04 Europe/Berlin — PASS / COMPLETE
+
+The user separately authorized T07 after accepting T06 with real Codex deferred. One implementing agent, no delegation. Atomic governance, request-bound approvals, immutable policy/threat-feed reload and lifetime runaway limits are complete. T08 remains TODO; stop here. Full data model, atomicity/lifecycle, exact file inventory, schemas, limits and T08 interfaces are in [docs/T07_REPORT.md](docs/T07_REPORT.md). Historical notes below retain their then-current state, including all T06 Codex failures. No real Codex invocation or investigation occurred in T07.
+
+### Implementation and boundaries
+
+- Standard-library SQLite adds budget_counters, approvals, reservations, reservation_claims and governance_audit beside unchanged events. WAL/FULL and BEGIN IMMEDIATE protect every authorization mutation. All applicable budget claims plus exact approved-record consumption commit together. Failed claims change no counters and do not burn approvals. Durable ALLOW/dispatch intent precede the sole provider/backend call; undispatched failure/cancellation refunds, dispatched actions remain spent and unknown tokens reserved. Actual missing-table/audit/cancellation regressions fail closed.
+- Generic policy schema 4/version t07 adds REQUIRE_APPROVAL with BLOCK precedence. Existing schema-1 Approval/BudgetState/UsageMetric/SecurityEvent are reused; contracts.py, pyproject.toml and uv.lock are unchanged. RAM-only canonical SHA256 binds original arguments/identity/channel/operation; persisted policy version and full policy/feed snapshot hash prevent permission reuse after edits. PENDING/APPROVED/DENIED/EXPIRED/CONSUMED, default 60-second original TTL, actual host approvals/approve/deny CLI, single atomic consume. No raw arguments/key/prompt/internal token stored.
+- Budget scopes session/agent/user/profile; requests/tokens/tool_calls/agent_steps; UTC epoch-aligned fixed windows. LLM request1/step1, MCP tool1/step1, resource step1, discovery0. Defaults requests60/60s, tools40/600s, steps60/600s, user tokens256000/hour. Lifetime steps60/tools40 never reset on window changes; host wall-time remains authoritative.
+- Native requested output plus 4096 input allowance reserves fully, fallback8192+allowance; complete numeric Anthropic/cache/Responses usage settles exactly once. Invalid/missing/incomplete usage retains the entire reservation and subscription money remains null. Exact input is unavailable before send; observed excess is charged and blocks future claims rather than pretending a hard total-token pre-generation bound.
+- Lifecycle-owned 500 ms poll validates complete candidates before atomically publishing frozen policy/guard/feed snapshots. One reference per operation/whole stream. Invalid policy/feed independently retain last good and expose only safe health categories. Protected config directory is read-only/gateway-only for visible atomic renames. Feed schema1 is literal/restricted-regex BLOCK, max128 signatures/256 characters/128 KiB; groups/repetition/alternation/lookarounds/backrefs/flags/semantic kinds rejected. Order secrets→PII→feed→relevant Jev. No new runtime/state/network allowance, dependency, NLP model, service, dashboard or automatic termination.
+
+### Tests and actual Docker
+
+Final **make test: 435 passed in 6.73 seconds**, Python3.12.15. Four final governance/usage/reload files contain 55 cases (14/10/22/9). Targeted loops covered serialization/native/guard/MCP/runtime/cancellation safety; counts overlap. make verify-governance passed 51 cases at its checkpoint and reported 14 proof groups; four later duplicate/excess/cancellation/quota cases passed in the final suite. SQLite50 concurrent/limit10 admitted exactly10, blocked40. Two concurrent approved retries consume once; MCP counter executes once. Failed multi-budget validation preserves every counter and approved state.
+
+Reviewed escalation was used for affected threaded/async tests that stall in the restricted runner, as previously documented. No production workaround was introduced. One meaningful checkpoint passed434 before Claude revealed the quota mismatch; one new regression plus the configuration correction justified the final435 run. Documentation-only changes afterward do not rerun the suite.
+
+Final source-changed gateway image passed **47/47 make verify-gateway-boundary**, **27/27 make verify-demo-boundary**, and **42/42 make verify-codex-boundary**, the latter fully synthetic/pinned CLI with synthetic provider state/backend and zero real Codex calls. Direct/host/sibling/DNS/UDP/IPv6 and inference-proxy denial, non-root/all-capability-zero/NNP/resources, protected config/key/credentials denial, durable admission and cleanup remain enforced. make compose-config validated runtime and both native auth Compose files. Unchanged lease/auth/profile/base/native/proxy code and images were reused; their historical matrices were not repeated.
+
+Synthetic governance Docker/SDK/actual host CLI passed **33/33**, session **8762bccf-bb7f-4818-a0ea-71f8016733b9**, 35 safe events, recorded00:19:42.496023UTC. Its semantic fixture is explicitly offline. Subsequent production demonstration uses the final gateway and actual Jev as below.
+
+### Production Jev governance demo — PASS
+
+`.venv/bin/python scripts/verify-governance-demo.py --live --key-file <private-host-input>` passed **33/33**, exit0, session **8f0b625c-4a61-487b-b7c3-de3982c0a26d**, **38** safe durable events, recorded00:27:02.120288UTC. No LLM call. Actual host aictrl approvals/approve approved the exact counter-only fixture **58a95311-b8ad-4ce2-936b-f5d36c754698**, original request **2a32201f-ebd1-45bc-82bf-2043bfa71e3a**, requested00:26:56.812756UTC/expiry60seconds. CONSUMED once; changed arguments created another PENDING record. Product admission has no automatic approval.
+
+Counter0 before approval→1 exactly once; four backend completions total (three safe lookups/one approved counter) with production Jev result checks. Pending/replay/changed-argument denial, small tool-quota BLOCK/no partial step increments, discovery0, host atomic policy BLOCK/feed literal reload, invalid policy/regex last-good retention, no restart, lifetime tool cap4 and cleanup all proved. No raw argument/feed marker/key/internal token in SQLite. Session containers/networks/ephemeral volumes and staged identity/key directories were removed.
+
+The user explicitly asked to **keep today's private host key input** at `/tmp/aictrl-t07-jev-input-_lb3d7cz/jev.env`; it remains mode0600 with parent0700 outside the repo. No value printed or written into tracked files/environment manifests/workspace/audit. Gateway-staged ephemeral copies still disappear normally. No persistent host environment setup was created.
+
+### Real Claude quota finding, correction and explicitly authorized extra trial
+
+Initial single permitted smoke was blocked before upstream under user.tokens100000/hour: session **ba49123e-eb31-4b01-a909-eb5fe682e988**, request **9196a618-cd21-4ad7-8bc8-48fb1e314adb**, native exit1, BLOCK **d71f4cbe-3db8-4d66-9d31-d00ea922bf0a**, governance.budget.tokens_exceeded. No ALLOW, reservation, provider send, usage or completion; cleanup passed. Request payload/declared output field was not retained. Safe failure report remains .aictrl/qualifications/t07-claude-budget-block.json.
+
+Corrected only configured quota to256000, without reducing reservation or changing models/provider/guards. Added one offline test reproducing100000BLOCK/no counters and full132096 reservation for128000 output+4096 input under256000. Official [model limits](https://platform.claude.com/docs/en/models/overview) and [Claude Code settings](https://code.claude.com/docs/en/env-vars) support accommodating128K output; the exact first request field is not inferred as observed. Targeted regression passed; final435 suite passed. Config-only correction required no image rebuild/Docker/Jev repeat.
+
+The user then explicitly replied **“Tak, jedna próba po poprawce”**. Exactly one additional `.venv/bin/python scripts/qualify-claude-t07.py --live` invoked:
+
+    .venv/bin/aictrl run claude demo/project --prompt 'Reply with exactly: AICTRL_T07_CLAUDE_OK' --timeout 90
+
+PASS: **AICTRL_T07_CLAUDE_OK**, native exit0, session **afdad8fa-6bd8-4c42-babe-d6040bfc9af9**, request **8a5647d8-881f-46cb-b729-907ebac09e78**, safe report .aictrl/qualifications/t07-claude.json recorded00:42:38.356951UTC. REDACT **12852946-eea2-4ec6-b612-5131e028da13**, ALLOW **2a164af7-0572-4571-9254-2c61ef9e69a6**, completion AUDIT **f4134c2c-6333-440e-827e-5c276b29ab9f**, all schema1/policyt07; no BLOCK/failure. One EMAIL_ADDRESS context redaction remains disclosed, consistent with T06; no raw context dump or whitelist.
+
+Reservation **745f1db6-709b-4e8a-bd4a-7e70960435c3** held request1/configuredstep1/lifetimestep1/**132096 tokens**. Final **SETTLED** with **21519 input including cache counters +20 output =21539**, releasing **110557**. SUBSCRIPTION/cost null. Actual numeric accounting and durable events survived cleanup; container/network/ephemeral-volume absence all passed, dedicated native state/workspace/audit preserved. No Jev key/call in either native smoke. All single-attempt permissions exhausted; no further automatic retry.
+
+### Images and next boundary
+
+Only changed gateway/demo sources rebuilt, final docker/images.lock.json:
+
+- aictrl-gateway:t07: **sha256:8fbc7dde580c2b5d6fa92f99521878112d27fe5b28b6d1a2fe97f2107510b9d4**;
+- aictrl-demo:t07: **sha256:78adcc3ca97a772dd9c120c30a788866af6f1a6f23d581d086c38159ea7fbbb7**.
+
+No new dependency pins, native binary/auth/state/profile changes or MIT attribution changes. Shared contracts1, policy4, feed1, image manifest1. Final git diff --check passed, exact inventory47changed/17added; contracts/dependency files/T06 report unchanged. An in-memory actual-key comparison found no value in changed/new files, T07 reports or audit DB/WAL; only a boolean was printed. Private input0600/parent0700 remains. Historical benchmarks predate governance and were not repeated. No distributed quota/rolling windows/semantic feed/universal native tool approvals/hard exact-input pre-generation quota are claimed. T08 can query safe events, budget/usage/approval projections, governance_audit and active snapshot health, then integrate host restrict/terminate hooks. Dashboard/risk/alerts/exports/automatic lifecycle work is excluded. **T07 COMPLETE; STOP before T08.**
+
 ## T06 checkpoint — 2026-10-04 Europe/Berlin — PASS / COMPLETE, Codex deferred
 
 The user explicitly authorized T06, superseding the former stop-before-T06 checkpoint. One implementing agent, no delegation. T01–T05/T05H remain COMPLETE; T07 and later remain TODO. Full capability checklist, exact file inventory, benchmark percentiles and limits are in [docs/T06_REPORT.md](docs/T06_REPORT.md). Historical notes below describe their then-current state, not today's T06 status.

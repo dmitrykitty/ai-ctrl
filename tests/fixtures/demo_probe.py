@@ -16,7 +16,7 @@ def inaccessible(path):
         return not Path(path).exists()
     except PermissionError:
         return True
-checks['no_access_to_host_credentials_socket_or_semantic_secret']=all(inaccessible(path) for path in ('/var/run/docker.sock','/root/.ssh','/root/.aws','/root/.kube','/home/dev/.ssh','/home/dev/.aws','/home/dev/.kube','/host','/run/secrets/aictrl/jev_api_key'))
+checks['no_access_to_host_credentials_socket_or_semantic_secret']=all(inaccessible(path) for path in ('/var/run/docker.sock','/root/.ssh','/root/.aws','/root/.kube','/home/dev/.ssh','/home/dev/.aws','/home/dev/.kube','/host','/run/secrets/aictrl/jev_api_key','/etc/aictrl/config/policy.yaml','/etc/aictrl/config/threat-feed.json','/var/lib/aictrl/events.sqlite3'))
 checks['no_provider_authentication_state']=all(inaccessible(path) for path in ('/home/dev/.claude/.credentials.json','/home/dev/.codex/auth.json'))
 checks['no_semantic_environment']=not any('JEV' in key.upper() for key in os.environ)
 

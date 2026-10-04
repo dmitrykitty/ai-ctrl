@@ -34,7 +34,7 @@ def create_mcp_server(service: Callable[[], MCPControlService]) -> Server:
         value = await service().read_resource(str(params.uri))
         return types.ReadResourceResult(contents=[types.TextResourceContents(uri=params.uri, mime_type='text/plain', text=value)])
 
-    server = Server('AICTRL protected demo', version='t06', on_list_tools=list_tools,
+    server = Server('AICTRL protected demo', version='t07', on_list_tools=list_tools,
                     on_call_tool=call_tool, on_list_resources=list_resources, on_read_resource=read_resource)
 
     async def safe_errors(ctx, call_next):
@@ -56,7 +56,7 @@ class MCPIdentityBoundary:
 
     async def __call__(self, scope, receive, send):
         request = Request(scope)
-        service = self.service()
+        service = self.service().capture()
         if not service.session.accepts(request.headers.getlist('x-aictrl-session')):
             control = service.request('unsupported')
             status = 401

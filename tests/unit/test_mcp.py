@@ -51,13 +51,13 @@ def test_official_sdk_discovery_independent_authorization_memory_and_no_leaks(tm
     async def proof(client):
         tools=await client.list_tools()
         names={tool.name for tool in tools.tools}
-        assert names=={'safe_lookup','echo_contact','poisoned_document'}
+        assert names=={'safe_lookup','echo_contact','poisoned_document','destructive_delete_all'}
         resources=await client.list_resources()
         assert {str(resource.uri) for resource in resources.resources}=={'memory://project/demo'}
         safe=await client.call_tool('safe_lookup',{})
         assert not safe.is_error and 'AICTRL_SAFE_LOOKUP_OK' in safe.content[0].text
         forbidden=await client.call_tool('destructive_delete_all',{})
-        assert forbidden.is_error and backend.invocations['destructive_delete_all']==0
+        assert forbidden.is_error and 'governance.approval.required' in str(forbidden) and backend.invocations['destructive_delete_all']==0
         project=await client.read_resource('memory://project/demo')
         assert project.contents[0].text=='AICTRL_PROJECT_MEMORY_OK'
         with pytest.raises(MCPError):

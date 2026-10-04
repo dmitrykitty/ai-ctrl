@@ -12,8 +12,82 @@ from aictrl.runtime.workspace import PROJECT_ROOT
 from aictrl.runtime.config import load_config
 from aictrl.reporting.store import EventStore, StoreFailure
 from aictrl.runtime.integration import verify_claude
+from aictrl.governance.approvals import ApprovalManager
+from aictrl.governance.store import ApprovalRecord, GovernanceStore
 
 app = typer.Typer(help="AI Control Layer — isolated coding-agent supervisor.", no_args_is_help=True)
+
+
+def governance(project: Path) -> GovernanceStore:
+    project = project.resolve()
+    settings = load_config(project)
+    path = project / settings.gateway.audit_directory / 'events.sqlite3'
+    if not path.is_file():
+        raise ValueError('No governance records stored yet.')
+    return GovernanceStore(path)
+
+
+def safe_approval(record: ApprovalRecord) -> str:
+    item = record.approval
+    return (f'{item.approval_id} session={item.session_id} request={item.request_id} '
+            f'state={item.state} policy={item.policy_version} operation={record.operation_id} '
+            f'requested={item.requested_at.isoformat()} expires={item.expires_at.isoformat()}')
+
+
+@app.command()
+def approvals(session: Annotated[UUID | None, typer.Option(help='Filter by managed session.')] = None,
+              project: Annotated[Path, typer.Option(help='Protected control project directory.')] = PROJECT_ROOT) -> None:
+    """List safe request-bound approvals; arguments and digests are withheld."""
+    try:
+        records = ApprovalManager(governance(project)).list(session)
+        for record in records:
+            typer.echo(safe_approval(record))
+        if not records:
+            typer.echo('No approvals.')
+    except (ValueError, StoreFailure):
+        typer.echo('Approval store unavailable.', err=True)
+        raise typer.Exit(2) from None
+
+
+def decide_approval(approval_id: UUID, project: Path, *, approve: bool) -> None:
+    try:
+        manager = ApprovalManager(governance(project))
+        record = manager.approve(approval_id) if approve else manager.deny(approval_id)
+        if record is None:
+            typer.echo('Approval not found.', err=True)
+            raise typer.Exit(1)
+        typer.echo(safe_approval(record))
+        expected = 'APPROVED' if approve else 'DENIED'
+        if record.approval.state != expected:
+            raise typer.Exit(1)
+    except (ValueError, StoreFailure):
+        typer.echo('Approval store unavailable.', err=True)
+        raise typer.Exit(2) from None
+
+
+@app.command()
+def approve(approval_id: Annotated[UUID, typer.Argument(help='Exact pending approval UUID.')],
+            project: Annotated[Path, typer.Option(help='Protected control project directory.')] = PROJECT_ROOT) -> None:
+    """Approve one pending request until its original expiry; never execute it."""
+    decide_approval(approval_id, project, approve=True)
+
+
+@app.command()
+def deny(approval_id: Annotated[UUID, typer.Argument(help='Exact pending approval UUID.')],
+         project: Annotated[Path, typer.Option(help='Protected control project directory.')] = PROJECT_ROOT) -> None:
+    """Deny one pending request without executing it."""
+    decide_approval(approval_id, project, approve=False)
+
+
+@app.command()
+def budgets(project: Annotated[Path, typer.Option(help='Protected control project directory.')] = PROJECT_ROOT) -> None:
+    """Show safe persisted counters, including conservative reservations."""
+    try:
+        for item in governance(project).budgets():
+            typer.echo(item.model_dump_json())
+    except (ValueError, StoreFailure):
+        typer.echo('Budget store unavailable.', err=True)
+        raise typer.Exit(2) from None
 
 
 @app.command()

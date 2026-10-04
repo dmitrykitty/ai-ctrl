@@ -33,7 +33,7 @@ status, result = native('/v1/messages/count_tokens?beta=true')
 checks['native_count_tokens'] = status == 200 and json.loads(result)['input_tokens'] == 7
 checks['invalid_identity_blocked'] = native('/v1/messages', 'invalid-synthetic-token')[0] == 401
 checks['unknown_route_blocked'] = native('/v1/models')[0] == 403
-checks['agent_cannot_read_gateway_storage'] = all(not Path(path).exists() for path in ('/etc/aictrl/session.json', '/etc/aictrl/policy.yaml', '/var/lib/aictrl/events.sqlite3'))
+checks['agent_cannot_read_gateway_storage'] = all(not Path(path).exists() for path in ('/etc/aictrl/session.json', '/etc/aictrl/policy.yaml', '/etc/aictrl/config/policy.yaml', '/etc/aictrl/config/threat-feed.json', '/var/lib/aictrl/events.sqlite3'))
 with socket.create_connection((os.environ['AICTRL_PROXY_IP'], 8080), timeout=5) as connection:
     connection.sendall(b'CONNECT api.anthropic.com:443 HTTP/1.1\r\nHost: api.anthropic.com:443\r\n\r\n')
     checks['inference_connect_proxy_denied'] = b' 403 ' in connection.recv(4096).split(b'\r\n', 1)[0]

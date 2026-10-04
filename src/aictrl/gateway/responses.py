@@ -5,6 +5,7 @@ import httpx
 from aictrl.contracts import AgentProtocol, Channel, Direction, InspectionLevel
 from aictrl.gateway.headers import codex_request_headers
 from aictrl.gateway.sse import ResponsesTerminal
+from aictrl.gateway.usage import ResponsesUsage, requested_reservation
 from aictrl.gateway.inspection import argument_strings, strings, text_content
 from aictrl.guards.models import InspectionSegment, Source
 
@@ -29,6 +30,11 @@ class ResponsesHandler:
 
     filter_request_headers = staticmethod(codex_request_headers)
     new_stream_observer = staticmethod(ResponsesTerminal)
+    new_usage_collector = staticmethod(ResponsesUsage)
+
+    @staticmethod
+    def token_reservation(payload: dict, settings) -> int:
+        return requested_reservation(payload, 'max_output_tokens', settings.token_reservation, settings.input_token_allowance)
 
     @staticmethod
     def validate_payload(payload: object, operation: str) -> bool:

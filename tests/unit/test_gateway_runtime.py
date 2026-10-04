@@ -17,7 +17,7 @@ def prepared(tmp_path, monkeypatch, *, pin_inference=False):
     project = tmp_path / 'control'
     (project / 'config').mkdir(parents=True)
     (project / 'docker').mkdir()
-    for file in ('config/policy.yaml', 'docker/compose.yaml'):
+    for file in ('config/policy.yaml', 'config/threat-feed.json', 'docker/compose.yaml'):
         (project / file).write_bytes((PROJECT_ROOT / file).read_bytes())
     workspace = tmp_path / 'workspace'
     workspace.mkdir()

@@ -68,7 +68,7 @@ def main():
             (project / 'config').mkdir(parents=True)
             (project / 'docker').mkdir()
             workspace.mkdir()
-            for file in ('config/policy.yaml', 'docker/compose.yaml'):
+            for file in ('config/policy.yaml', 'config/threat-feed.json', 'docker/compose.yaml'):
                 shutil.copyfile(PROJECT_ROOT / file, project / file)
             for file in ('gateway_probe.py', 'runtime_probe.py'):
                 shutil.copyfile(PROJECT_ROOT / 'tests/fixtures' / file, workspace / file)
