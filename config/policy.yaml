@@ -1,5 +1,5 @@
-schema_version: 4
-policy_version: t07
+schema_version: 5
+policy_version: t08
 default_action: BLOCK
 agents:
   claude:
@@ -58,6 +58,14 @@ governance:
   runaway:
     max_agent_steps: 60
     max_tool_calls: 40
+risk:
+  window_seconds: 300
+  thresholds: {medium: 25, high: 100, critical: 160}
+response:
+  medium: notify
+  high: restrict
+  critical: terminate
+  alert_cooldown_seconds: 60
 guards:
   secrets:
     enabled: true

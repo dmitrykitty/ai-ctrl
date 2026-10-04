@@ -24,6 +24,8 @@ from aictrl.runtime.registry import resolve_agent
 from aictrl.policy.loader import load_policy
 from aictrl.runtime.secrets import stage_jev_key
 from aictrl.guards.threat_feed import load_feed
+from aictrl.reporting.service import ReportingStore
+from aictrl.reporting.sink import StoreFailure
 
 
 @dataclass
@@ -37,7 +39,7 @@ class ManagedSession:
 class RuntimeSupervisor:
     def __init__(self, workspace: Path, settings: ProjectConfig, adapter: AgentAdapter,
                  project: Path = PROJECT_ROOT, *, interactive: bool = False,
-                 test_upstream_network: str | None = None) -> None:
+                 test_upstream_network: str | None = None, session_kind: str | None = None) -> None:
         self.workspace = validate_workspace(workspace, project)
         self.settings, self.adapter, self.project = settings, adapter, project
         self.uid, self.gid = os.getuid(), os.getgid()
@@ -71,6 +73,11 @@ class RuntimeSupervisor:
         self.process: subprocess.Popen | None = None
         self._prepared = False
         self._closed = False
+        self.reporting: ReportingStore | None = None
+        self.session_kind = session_kind or ('demo' if stateless else 'native')
+        self._response_termination = False
+        self._response_poll_at = 0.0
+        self._exit_code: int | None = None
 
     def remaining(self) -> float:
         remaining = self._deadline - time.monotonic()
@@ -109,6 +116,10 @@ class RuntimeSupervisor:
                 raise RuntimeFailure('Audit storage must stay in the protected control directory.')
             audit.mkdir(parents=True, exist_ok=True, mode=0o700)
             audit.chmod(0o700)
+            self.reporting = ReportingStore(audit / 'events.sqlite3')
+            self.reporting.start_session(self.session.identity.session_id, self.adapter.name, self.adapter.name,
+                                         None if self.agent.stateless else self.session.identity.protocol,
+                                         self.session.identity.started_at, kind=self.session_kind)
         # Reserve the same engine-level name used by authentication operations.
         # This stopped container holds no mounts and prevents concurrent state use.
         if volume:
@@ -155,22 +166,67 @@ class RuntimeSupervisor:
         result = docker(['inspect', '--format', '{{index .Config.Labels "io.aictrl.session"}}', identifier], timeout=3, check=False)
         return result.returncode == 0 and result.stdout.strip() == self.identifier
 
-    def _signal_agent(self, sig: str) -> None:
+    def _signal_agent(self, sig: str) -> bool:
         identifier = self.session.container_id or self.session.container_name
         if self._owned(identifier):
-            docker(['kill', '--signal', sig, identifier], timeout=3, check=False)
+            return docker(['kill', '--signal', sig, identifier], timeout=3, check=False).returncode == 0
+        return False
+
+    def _report_state(self) -> None:
+        if self.reporting is not None:
+            self.reporting.lifecycle(self.session.identity.session_id, self.session.identity.state,
+                                     ended=self.session.identity.ended_at, exit_code=self._exit_code)
 
     def restrict(self) -> None:
-        """Future response hook: disconnect only this managed agent's network."""
+        """Host response: disconnect only this owned managed agent's network."""
         identifier = self.session.container_id or self.session.container_name
-        if self._owned(identifier):
+        if not self._owned(identifier):
+            raise RuntimeFailure('Session ownership unavailable; response refused.')
+        if self.session.identity.state != SessionState.RESTRICTED:
             docker(['network', 'disconnect', '--force', self.internal_network, identifier])
             self.session.identity.state = SessionState.RESTRICTED
+            self._report_state()
 
-    def terminate(self) -> None:
-        """Future response hook: request termination of this session only."""
+    def terminate(self) -> bool:
+        """Host response: SIGTERM only the currently owned session."""
+        if self.session.identity.state == SessionState.TERMINATING:
+            return self._owned(self.session.container_id or self.session.container_name)
+        if not self._signal_agent('SIGTERM'):
+            return False
         self.session.identity.state = SessionState.TERMINATING
-        self._signal_agent('SIGTERM')
+        self._report_state()
+        return True
+
+    def _poll_responses(self, *, notify_only: bool = False) -> None:
+        if self.reporting is None or time.monotonic() < self._response_poll_at:
+            return
+        self._response_poll_at = time.monotonic() + 0.25
+        try:
+            alerts = self.reporting.pending(self.session.identity.session_id)
+        except StoreFailure:
+            print('AICTRL reporting temporarily unavailable; existing enforcement remains active.', file=sys.stderr)
+            self._response_poll_at = time.monotonic() + 2
+            return
+        for alert in alerts:
+            if notify_only and alert.response != 'notify':
+                continue
+            print(f'AICTRL ALERT {alert.severity} session={alert.session_id} rule={alert.rule_id} response={alert.response}', flush=True)
+            try:
+                if alert.session_id != self.session.identity.session_id:
+                    raise RuntimeFailure('Alert ownership unavailable.')
+                if alert.response == 'restrict':
+                    self.restrict()
+                elif alert.response == 'terminate':
+                    if not self.terminate():
+                        raise RuntimeFailure('Owned session termination unavailable.')
+                    self._response_termination = True
+                self.reporting.complete(alert)
+            except (RuntimeFailure, StoreFailure):
+                try:
+                    self.reporting.failed_response(alert)
+                except StoreFailure:
+                    pass
+                print(f'AICTRL response incomplete session={self.identifier} alert={alert.alert_id}', file=sys.stderr)
 
     def _handle_signal(self, signum, frame) -> None:
         self.stop_signal = signum
@@ -202,13 +258,15 @@ class RuntimeSupervisor:
             self.process = subprocess.Popen(args, stdin=input_file,
                                             stdout=output_file, stderr=output_file, start_new_session=True)
             self.session.identity.state = SessionState.ACTIVE
+            self._report_state()
             stopping_at = None
             while self.process.poll() is None:
                 if self.session.container_id is None:
                     found = docker(['inspect', '--format', '{{.Id}}', self.session.container_name], timeout=2, check=False)
                     if found.returncode == 0:
                         self.session.container_id = found.stdout.strip()
-                if self.stop_signal or time.monotonic() >= self._deadline:
+                self._poll_responses()
+                if self.stop_signal or time.monotonic() >= self._deadline or self._response_termination:
                     if stopping_at is None:
                         stopping_at = time.monotonic()
                         self.terminate()
@@ -226,7 +284,7 @@ class RuntimeSupervisor:
                 result = 128 + self.stop_signal
             elif time.monotonic() >= self._deadline:
                 result = 124
-            self.session.identity.state = SessionState.TERMINATED if result == 0 else SessionState.FAILED
+            self.session.identity.state = SessionState.TERMINATED if result == 0 or self._response_termination else SessionState.FAILED
         except RuntimeDeadline:
             result = 124
             self.session.identity.state = SessionState.FAILED
@@ -238,12 +296,14 @@ class RuntimeSupervisor:
                 self.session.identity.state = SessionState.FAILED
                 raise
         finally:
+            self._exit_code = result
             try:
                 self.close()
             finally:
                 for sig, handler in previous.items():
                     signal.signal(sig, handler)
                 self.session.identity.ended_at = datetime.now(timezone.utc)
+                self._report_state()
                 if input_file is not None:
                     input_file.close()
                 if output_file is not None:
@@ -279,6 +339,13 @@ class RuntimeSupervisor:
                         self.process.kill()
                         self.process.wait(timeout=3)
                 self.directory.cleanup()
+                if self.reporting is not None:
+                    if self.session.identity.state in (SessionState.STARTING, SessionState.ACTIVE, SessionState.RESTRICTED, SessionState.TERMINATING):
+                        self.session.identity.state = SessionState.TERMINATED if cleanup_error is None else SessionState.FAILED
+                    self.session.identity.ended_at = datetime.now(timezone.utc)
+                    self._response_poll_at = 0
+                    self._poll_responses(notify_only=True)
+                    self._report_state()
         if cleanup_error:
             raise RuntimeFailure(f'Cleanup failed for managed session {self.identifier}.') from None
 

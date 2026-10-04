@@ -3,6 +3,13 @@
 .PHONY: benchmark-gateway
 .DEFAULT_GOAL := bootstrap
 
+.PHONY: verify-reporting verify-reporting-response
+verify-reporting:
+	./scripts/uv.sh run --frozen python scripts/verify-reporting.py
+
+verify-reporting-response:
+	./scripts/uv.sh run --frozen python scripts/verify-reporting-response.py
+
 .PHONY: verify-governance verify-governance-demo
 verify-governance:
 	./scripts/uv.sh run --frozen python scripts/verify-governance.py

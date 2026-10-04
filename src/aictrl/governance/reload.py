@@ -6,6 +6,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
+from datetime import datetime, timezone
+from typing import Callable
 
 from aictrl.guards.engine import GuardEngine
 from aictrl.guards.semantic import SemanticDecisionProvider
@@ -48,6 +50,7 @@ class ConfigSnapshotManager:
         # factory's initial read and watcher construction.
         self._stamps = {'policy': None, 'feed': None}
         self._status = {'policy': 'loaded' if policy_path else 'static', 'feed': 'loaded' if feed_path else 'static'}
+        self._successful = dict.fromkeys(('policy', 'feed'), datetime.now(timezone.utc).isoformat())
 
     @staticmethod
     def _stamp(path: Path | None):
@@ -68,7 +71,9 @@ class ConfigSnapshotManager:
             return {'active_policy_version': current.policy.policy_version,
                     'active_feed_version': current.feed.feed_version,
                     'last_policy_reload_status': self._status['policy'],
-                    'last_feed_reload_status': self._status['feed']}
+                    'last_feed_reload_status': self._status['feed'],
+                    'last_policy_reload_at': self._successful['policy'],
+                    'last_feed_reload_at': self._successful['feed']}
 
     def poll(self) -> None:
         with self._lock:
@@ -92,11 +97,15 @@ class ConfigSnapshotManager:
                     continue
                 policy, feed = trial.policy, trial.feed
                 self._status[kind] = 'applied'
+                self._successful[kind] = datetime.now(timezone.utc).isoformat()
                 changed = True
             if changed:
                 self._current = snapshot(policy, feed, self.provider)
 
-    async def watch(self) -> None:
+    async def watch(self, on_change: Callable | None = None) -> None:
         while True:
             await asyncio.sleep(self.poll_seconds)
+            before = self.status()
             await asyncio.to_thread(self.poll)
+            if on_change is not None and self.status() != before:
+                await asyncio.to_thread(on_change)

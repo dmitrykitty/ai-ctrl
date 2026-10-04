@@ -12,5 +12,6 @@ cp docker/base/entrypoint.sh "$task_context/entrypoint.sh"
 cp docker/base/init-firewall.sh "$task_context/init-firewall.sh"
 cp demo/agent/main.py "$task_context/main.py"
 cp demo/agent/governance.py "$task_context/governance.py"
-docker build --tag aictrl-demo:t07 "$task_context"
-python3 scripts/record-image.py demo aictrl-demo:t07
+cp demo/agent/response.py "$task_context/response.py"
+docker build --tag aictrl-demo:t08 "$task_context"
+python3 scripts/record-image.py demo aictrl-demo:t08

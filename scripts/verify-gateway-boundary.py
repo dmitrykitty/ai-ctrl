@@ -22,6 +22,7 @@ from aictrl.runtime.config import TestDestination, load_config
 from aictrl.runtime.docker import docker
 from aictrl.runtime.supervisor import RuntimeSupervisor
 from aictrl.runtime.workspace import PROJECT_ROOT
+from demo_support import notify_policy
 
 
 def clean_session(identifier):
@@ -70,6 +71,7 @@ def main():
             workspace.mkdir()
             for file in ('config/policy.yaml', 'config/threat-feed.json', 'docker/compose.yaml'):
                 shutil.copyfile(PROJECT_ROOT / file, project / file)
+            notify_policy(project / 'config/policy.yaml')
             for file in ('gateway_probe.py', 'runtime_probe.py'):
                 shutil.copyfile(PROJECT_ROOT / 'tests/fixtures' / file, workspace / file)
             (workspace / 'input.txt').write_text('host workspace\n')

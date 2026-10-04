@@ -25,7 +25,7 @@ BODY = json.dumps({'model':'native-model','instructions':PROMPT,'input':[{'role'
 def fixture(tmp_path, *, enabled=True, action='ALLOW', status=200, store_error=False):
     session = GatewaySession(session_id=uuid4(), agent_id='codex', adapter='codex', protocol='RESPONSES', user_id='local', profile_id='default',
                              expires_at=datetime.now(timezone.utc)+timedelta(minutes=5),session_token=TOKEN)
-    policy = Policy(schema_version=4, policy_version='t05', default_action='BLOCK',
+    policy = Policy(schema_version=5, policy_version='t05', default_action='BLOCK',
                     agents={'codex': AgentPolicy(enabled=enabled, rules=(AdmissionRule(
                         id='native.responses', channel='LLM', direction='OUTBOUND', protocol='RESPONSES',
                         target='openai', operations=('responses',), action=action),))})

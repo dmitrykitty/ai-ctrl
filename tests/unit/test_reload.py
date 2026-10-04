@@ -46,10 +46,10 @@ def test_duplicate_budget_unknown_fields_and_old_schema_rejected(tmp_path):
     with pytest.raises(ValidationError):
         GovernanceSettings.model_validate({'secret': 'synthetic private YAML'})
     from aictrl.policy.loader import load_policy
-    for version in (1, 2, 3):
+    for version in (1, 2, 3, 4):
         path = tmp_path / 'old.yaml'
         path.write_text(f'schema_version: {version}\nsecret: private\n')
-        with pytest.raises(ValueError, match='configuration schema 4 is required'):
+        with pytest.raises(ValueError, match='configuration schema 5 is required'):
             load_policy(path)
 
 

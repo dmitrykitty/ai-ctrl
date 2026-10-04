@@ -33,10 +33,10 @@
   "claude_runtime_repo_digests": [
     "aictrl-claude@sha256:5ed6e58ce234b455d1599fa4f7fba03188255e441af8f43781722151913cdeaf"
   ],
-  "gateway_local_ref": "aictrl-gateway:t07",
-  "gateway_image_id": "sha256:8fbc7dde580c2b5d6fa92f99521878112d27fe5b28b6d1a2fe97f2107510b9d4",
+  "gateway_local_ref": "aictrl-gateway:t08",
+  "gateway_image_id": "sha256:8440b8ea4229702a6db3869385a7b1230cfd18f637a5927783273ee91c9c275c",
   "gateway_repo_digests": [
-    "aictrl-gateway@sha256:8fbc7dde580c2b5d6fa92f99521878112d27fe5b28b6d1a2fe97f2107510b9d4"
+    "aictrl-gateway@sha256:8440b8ea4229702a6db3869385a7b1230cfd18f637a5927783273ee91c9c275c"
   ],
   "codex_version": "0.159.3",
   "codex_release_url": "https://github.com/openai/codex/releases/tag/rust-v0.159.3",
@@ -53,9 +53,9 @@
     "license": "400d38e5cfee181230373a8b02d38f50271a5bf62c62410382efddb8e8b19e22"
   },
   "codex_code_mode_host_sha256_amd64": "85fe4cc711712d3f5d3c37fad955c240acb9ce878c1c95d6f8b45028dcc36d7c",
-  "demo_local_ref": "aictrl-demo:t07",
-  "demo_image_id": "sha256:78adcc3ca97a772dd9c120c30a788866af6f1a6f23d581d086c38159ea7fbbb7",
+  "demo_local_ref": "aictrl-demo:t08",
+  "demo_image_id": "sha256:5c3f43059a8044427261457ee256280c83f835c56e8829ea6de947e2a705684c",
   "demo_repo_digests": [
-    "aictrl-demo@sha256:78adcc3ca97a772dd9c120c30a788866af6f1a6f23d581d086c38159ea7fbbb7"
+    "aictrl-demo@sha256:5c3f43059a8044427261457ee256280c83f835c56e8829ea6de947e2a705684c"
   ]
 }

@@ -1,5 +1,13 @@
 # AI Control Layer — real-agent MVP
 
+## Approved overnight T08→T09→T10 amendment (2026-10-04)
+
+The user explicitly authorizes sequential reporting/response, full verification and stabilization, preserving the current local T07 implementation. Do not stop between those milestones for routine permission. Stop before T11. Reliability, security, quick startup and clear visual reporting take priority over optional features. The local tree, not remote main, is authoritative. T07 focused gate passed55; checkpoint commit5e93c1a preserves the existing qualified implementation.
+
+T08 is a small host-side loopback-only FastAPI/server-rendered dashboard with local assets, durable safe session/latency/risk/alert metadata and host-owned restrict/terminate responses. No raw content/credentials/tokens, Docker socket in gateway/dashboard, frontend build/CDN or service stack. Governance state is reused. Risk/response settings explicitly migrate policy4→5; shared contracts1 remain unchanged. T09 adds offline verify-final, safe privacy/failure qualification and deterministic demo-ready/rehearsal paths. T10 declares feature freeze and measures one clean-start rehearsal; no new features or presentation work.
+
+Native AICTRL Codex compatibility remains fail-closed/deferred; no real invocation or parser broadening. Claude is the final real-agent proof. The user's subsequent steering permits necessary Jev and Claude Code test repetitions until a good result, superseding earlier one-trial limits. Do not request the key again: its approved private host input remains available and outside the repo; stage gateway-only ephemeral copies normally. Full suite/judge runs occur at meaningful checkpoints and final qualification, not after every edit.
+
 ## Approved T07 amendment (2026-10-04)
 
 The user supplied the separate T07 specification after accepting T06 with real Codex compatibility deferred. T07 is authorized; stop before T08 and do not run or investigate real Codex. One implementing agent owns the work. Governance uses the existing protected SQLite database with additive tables and WAL/FULL durability. Exact request approval consumption and every applicable budget reservation must commit in one BEGIN IMMEDIATE transaction. Failed multi-budget validation preserves both counters and an approved record. Durable admission and dispatch intent precede the sole provider/backend call.

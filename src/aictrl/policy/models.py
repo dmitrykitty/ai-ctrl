@@ -105,13 +105,57 @@ class GovernanceSettings(PolicyModel):
         return self
 
 
+class RiskThresholds(PolicyModel):
+    medium: int = Field(default=25, ge=1, le=1000000)
+    high: int = Field(default=100, ge=1, le=1000000)
+    critical: int = Field(default=160, ge=1, le=1000000)
+
+    @model_validator(mode='after')
+    def increasing(self):
+        if not self.medium < self.high < self.critical:
+            raise ValueError('Risk thresholds must increase.')
+        return self
+
+
+class RiskSettings(PolicyModel):
+    window_seconds: int = Field(default=300, ge=1, le=86400)
+    weights: dict[Identifier, int] = Field(default_factory=lambda: {
+        'guard.secret.detected': 40, 'guard.semantic.prompt_injection': 35,
+        'guard.semantic.data_exfiltration': 50, 'guard.semantic.security_bypass': 50,
+        'guard.threat_feed.detected': 35, 'mcp.policy.blocked': 20,
+        'operation.resource.private.read': 25, 'governance.budget': 15,
+        'governance.runaway': 20, 'llm.invalid_session': 25, 'mcp.invalid_session': 25,
+    }, max_length=128)
+    thresholds: RiskThresholds = Field(default_factory=RiskThresholds)
+
+    @model_validator(mode='after')
+    def safe_weights(self):
+        if any(type(value) is not int or not 0 <= value <= 1000 for value in self.weights.values()):
+            raise ValueError('Risk weights must be bounded nonnegative integers.')
+        object.__setattr__(self, 'weights', MappingProxyType(dict(self.weights)))
+        return self
+
+    @field_serializer('weights')
+    def serialize_weights(self, weights):
+        return dict(weights)
+
+
+class ResponseSettings(PolicyModel):
+    medium: Literal['notify', 'restrict', 'terminate'] = 'notify'
+    high: Literal['notify', 'restrict', 'terminate'] = 'restrict'
+    critical: Literal['notify', 'restrict', 'terminate'] = 'terminate'
+    alert_cooldown_seconds: int = Field(default=60, ge=1, le=3600)
+
+
 class Policy(PolicyModel):
-    schema_version: Literal[4]
+    schema_version: Literal[5]
     policy_version: Identifier
     default_action: Literal['BLOCK']
     agents: dict[Identifier, AgentPolicy] = Field(default_factory=dict)
     guards: GuardSettings = Field(default_factory=GuardSettings)
     governance: GovernanceSettings = Field(default_factory=GovernanceSettings)
+    risk: RiskSettings = Field(default_factory=RiskSettings)
+    response: ResponseSettings = Field(default_factory=ResponseSettings)
 
     @model_validator(mode='after')
     def unique_rule_ids(self):

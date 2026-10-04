@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from typing import Any
 import asyncio
 from copy import deepcopy
+from functools import wraps
+from time import perf_counter_ns
 
 import jsonschema
 
@@ -20,6 +22,22 @@ from aictrl.governance.admission import admit, GovernanceBlocked
 from aictrl.governance.approvals import request_digest
 from aictrl.governance.budgets import BudgetManager
 from aictrl.governance.reload import ConfigSnapshot, ConfigSnapshotManager
+from aictrl.reporting.service import ReportingStore
+from aictrl.reporting.timing import Timings
+
+
+def measured(method):
+    @wraps(method)
+    async def execute(self, *args, **kwargs):
+        current = self.capture()
+        worker = MCPControlService(current.session, current.policy, current.guards, current.sink, current.backend,
+                                   snapshot=current.snapshot, governance=current.governance, reporting=current.reporting)
+        worker.timing = Timings(current.reporting)
+        try:
+            return await method(worker, *args, **kwargs)
+        finally:
+            await asyncio.shield(asyncio.to_thread(worker.timing.finish))
+    return execute
 
 
 class MCPBlocked(RuntimeError):
@@ -32,9 +50,12 @@ class MCPBlocked(RuntimeError):
 class MCPControlService:
     def __init__(self, session: GatewaySession, policy: PolicyEngine, guards: GuardEngine,
                  sink: EventSink, backend: MCPBackend, *, snapshots: ConfigSnapshotManager | None = None,
-                 snapshot: ConfigSnapshot | None = None, governance: BudgetManager | None = None) -> None:
+                 snapshot: ConfigSnapshot | None = None, governance: BudgetManager | None = None,
+                 reporting: ReportingStore | None = None) -> None:
         self.session, self.policy, self.guards, self.backend = session, policy, guards, backend
-        self.audit = EventRecorder(session, policy.policy.policy_version, sink)
+        self.reporting, self.timing = reporting, None
+        self.audit = EventRecorder(session, policy.policy.policy_version, sink, reporting=reporting,
+                                   risk=policy.policy.risk, response=policy.policy.response)
         self.sink, self.snapshots, self.snapshot, self.governance = sink, snapshots, snapshot, governance
         self.context = PolicyContext(session_id=session.session_id, agent_id=session.agent_id,
                                      user_id=session.user_id, profile_id=session.profile_id,
@@ -45,12 +66,15 @@ class MCPControlService:
             return self
         current = self.snapshots.capture()
         return MCPControlService(self.session, current.engine, current.guards, self.sink, self.backend,
-                                 snapshot=current, governance=self.governance)
+                                 snapshot=current, governance=self.governance, reporting=self.reporting)
 
     def request(self, operation: str) -> ControlRequest:
-        return ControlRequest(session_id=self.session.session_id, channel='MCP', direction='OUTBOUND',
+        request = ControlRequest(session_id=self.session.session_id, channel='MCP', direction='OUTBOUND',
                               protocol=None, inspection_level='STRUCTURED', target_id='demo-mcp',
                               operation_id=operation, created_at=datetime.now(timezone.utc))
+        if self.timing is not None and self.timing.request is None:
+            self.timing.request = request
+        return request
 
     def allowed(self, operation: str) -> bool:
         return self.policy.decide(self.context, self.request(operation)).action != DecisionAction.BLOCK
@@ -71,7 +95,8 @@ class MCPControlService:
 
     async def admit(self, control, action, digest):
         try:
-            return await admit(self.governance, self.snapshot, self.context, control, action, self.audit, digest=digest)
+            with self.timing.span('governance'):
+                return await admit(self.governance, self.snapshot, self.context, control, action, self.audit, digest=digest)
         except GovernanceBlocked as error:
             raise MCPBlocked(error.reason, error.approval_id) from None
 
@@ -88,6 +113,7 @@ class MCPControlService:
             await self.audit.record(control, DecisionAction.BLOCK, 'governance.store_unavailable')
             raise
 
+    @measured
     async def list_tools(self):
         if self.snapshots is not None:
             return await self.capture().list_tools()
@@ -99,6 +125,7 @@ class MCPControlService:
         await self.settle(reservation, control)
         return visible
 
+    @measured
     async def list_resources(self):
         if self.snapshots is not None:
             return await self.capture().list_resources()
@@ -110,6 +137,7 @@ class MCPControlService:
         await self.settle(reservation, control)
         return visible
 
+    @measured
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         if self.snapshots is not None:
             return await self.capture().call_tool(name, arguments)
@@ -126,7 +154,9 @@ class MCPControlService:
         except Exception:
             await self.block(control, 'mcp.invalid_arguments')
             raise AssertionError('Unreachable')
+        started = perf_counter_ns()
         guarded = await self.guards.inspect_input(segments, channel=Channel.MCP)
+        self.timing.guards(guarded, started)
         if guarded.action == DecisionAction.BLOCK:
             await self.block(control, guarded.reason_code, guarded.identifiers)
         if guarded.action == DecisionAction.REDACT:
@@ -136,7 +166,8 @@ class MCPControlService:
         reservation = await self.admit(control, action, digest)
         try:
             try:
-                value = await self.backend.call_tool(name, arguments)
+                with self.timing.span('mcp_backend'):
+                    value = await self.backend.call_tool(name, arguments)
             except Exception:
                 await self.audit.record(control, DecisionAction.AUDIT, 'mcp.backend_failed', usage=self.usage(control))
                 raise MCPBlocked('mcp.backend_failed') from None
@@ -147,6 +178,7 @@ class MCPControlService:
         finally:
             await self.settle(reservation, control)
 
+    @measured
     async def read_resource(self, uri: str) -> str:
         if self.snapshots is not None:
             return await self.capture().read_resource(uri)
@@ -158,7 +190,8 @@ class MCPControlService:
         reservation = await self.admit(control, action, request_digest(self.context, control, {'uri': uri}))
         try:
             try:
-                value = await self.backend.read_resource(uri)
+                with self.timing.span('mcp_backend'):
+                    value = await self.backend.read_resource(uri)
             except Exception:
                 await self.audit.record(control, DecisionAction.AUDIT, 'mcp.backend_failed', usage=self.usage(control))
                 raise MCPBlocked('mcp.backend_failed') from None
@@ -173,7 +206,9 @@ class MCPControlService:
         if not isinstance(value, str) or len(value.encode()) > self.guards.settings.output.max_bytes:
             await self.result_block(control, 'guard.output.too_large')
         segment = InspectionSegment('result', value, source, mutable=False, untrusted_external=True)
+        started = perf_counter_ns()
         guarded = await self.guards.inspect_output((segment,), semantic=True, channel=Channel.MCP)
+        self.timing.guards(guarded, started)
         if guarded.action == DecisionAction.BLOCK:
             await self.result_block(control, guarded.reason_code, guarded.identifiers)
         await self.audit.record(control, DecisionAction.AUDIT, 'mcp.backend_completed', usage=self.usage(control))

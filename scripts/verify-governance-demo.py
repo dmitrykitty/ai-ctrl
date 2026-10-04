@@ -27,6 +27,7 @@ from aictrl.runtime.config import load_config
 from aictrl.runtime.docker import docker
 from aictrl.runtime.supervisor import RuntimeSupervisor
 from aictrl.runtime.workspace import PROJECT_ROOT
+from demo_support import select_fixture
 
 
 def atomic(path: Path, value: object) -> None:
@@ -52,6 +53,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--live', action='store_true', help='Use production factory and real external Jev.')
     parser.add_argument('--key-file', type=Path, help='Private host .env input, used only with --live; never deleted by this verifier.')
+    parser.add_argument('--history', action='store_true', help='Keep safe demo evidence in the dashboard; production config remains unchanged.')
     args = parser.parse_args()
     previous_key = os.environ.get('AICTRL_JEV_API_KEY')
     current = None
@@ -87,27 +89,24 @@ def main() -> int:
             for file in ('config/project.yaml', 'config/policy.yaml', 'config/threat-feed.json', 'docker/compose.yaml'):
                 shutil.copyfile(PROJECT_ROOT / file, project / file)
             original = load_policy(project / 'config/policy.yaml').model_dump(mode='json')
+            original['response'].update(medium='notify', high='notify', critical='notify')
             initial = deepcopy(original)
             initial['policy_version'] = 't07-demo'
             atomic(project / 'config/policy.yaml', initial)
             settings = load_config(PROJECT_ROOT)
             settings.limits.wall_time_seconds = 120
-            current = RuntimeSupervisor(workspace, settings, DemoAgentAdapter(settings.demo.image), project)
+            control = PROJECT_ROOT if args.history else project
+            current = RuntimeSupervisor(workspace, settings, DemoAgentAdapter(settings.demo.image), control,
+                                        session_kind=('demo' if args.live else 'offline-demo') if args.history else 'verification')
             current.prepare()
             manifest = json.loads(current.manifest.read_text())
             checks['stateless_no_provider_lease'] = current.lock_id is None and 'provider-state' not in manifest['volumes']
             checks['config_only_gateway_readonly'] = all('/config' not in str(manifest['services'][name]['volumes']) for name in ('agent', 'proxy')) and manifest['services']['gateway']['volumes'][1]['read_only']
-            if not args.live:
-                gateway = manifest['services']['gateway']
-                gateway['environment']['PYTHONPATH'] = '/opt/aictrl/src:/fixtures'
-                gateway['entrypoint'] = ['python', '-m', 'uvicorn', 'gateway_factory:application', '--factory', '--host', '0.0.0.0', '--port', '8000', '--no-access-log', '--log-level', 'warning']
-                gateway['volumes'].append({'type': 'bind', 'source': str(PROJECT_ROOT / 'tests/fixtures'), 'target': '/fixtures', 'read_only': True})
-                current.manifest.write_text(json.dumps(manifest))
-                current._docker([*current.compose, 'up', '--detach', '--wait', '--force-recreate', 'gateway'], timeout=30)
+            select_fixture(current, project / 'config', semantic=not args.live)
             gateway_id = docker([*current.compose, 'ps', '--quiet', 'gateway']).stdout.strip()
             started = docker(['inspect', '--format', '{{.State.StartedAt}}/{{.RestartCount}}', gateway_id]).stdout.strip()
             identity = current.session.identity
-            store = GovernanceStore(project / '.aictrl/audit/events.sqlite3')
+            store = GovernanceStore(control / '.aictrl/audit/events.sqlite3')
             audit = EventStore(store.path)
             context = PolicyContext(session_id=identity.session_id, agent_id='demo-agent', user_id=identity.user_id,
                                     profile_id=identity.profile_id, policy_version='t07-demo')
@@ -140,15 +139,15 @@ def main() -> int:
                             if len(records) != 1:
                                 raise RuntimeError('Exact authorized synthetic request unavailable.')
                             record = records[0]
-                            host_cli(project, 'approvals', '--session', str(identity.session_id))
+                            host_cli(control, 'approvals', '--session', str(identity.session_id))
                             print('Host CLI: aictrl approve ' + str(record.approval.approval_id), flush=True)
-                            host_cli(project, 'approve', str(record.approval.approval_id))
+                            host_cli(control, 'approve', str(record.approval.approval_id))
                             checks['explicit_host_cli_approved_exact_request'] = True
                         elif phase == 'approval_complete':
-                            states = [item for item in store.budgets() if item.dimension == 'tool_calls' and item.window_start.timestamp() != 0]
+                            states = [item for item in store.budgets() if item.dimension == 'tool_calls' and item.scope_id == str(identity.session_id) and item.window_start.timestamp() != 0]
                             if len(states) != 1 or states[0].used != 3 or states[0].reserved:
                                 raise RuntimeError('Expected tool accounting unavailable.')
-                            before = numeric_counters(store)
+                            before = [row for row in numeric_counters(store) if row[2] == str(identity.session_id)]
                             candidate = deepcopy(original)
                             candidate['policy_version'] = 't07-demo-budget'
                             for rule in candidate['governance']['budgets']:
@@ -156,7 +155,7 @@ def main() -> int:
                                     rule['limit'] = 3
                             atomic(project / 'config/policy.yaml', candidate)
                         elif phase == 'budget_complete':
-                            checks['failed_multi_budget_no_partial_step'] = before == numeric_counters(store)
+                            checks['failed_multi_budget_no_partial_step'] = before == [row for row in numeric_counters(store) if row[2] == str(identity.session_id)]
                             candidate = deepcopy(original)
                             candidate['policy_version'] = 't07-demo-block'
                             rule = deepcopy(candidate['agents']['demo-agent']['rules'][-1])

@@ -1,5 +1,11 @@
 # Implementation notes
 
+## T08 checkpoint — 2026-10-04 — PASS / COMPLETE
+
+Overnight T08→T09→T10 is explicitly authorized; stop before T11. One agent, no delegation. T07 entry gate passed55. T08 adds the loopback read-only six-view dashboard, durable lifecycle/status/latency, explainable windowed risk/alerts and owned host notify/restrict/terminate. Policy schema5/versiont08; shared contracts remain1. Final offline checkpoint465 passed8.54s; new verifier30 passed3.32s; subsequent view refinement27 targeted passed. Actual Docker response27/27 passed: restriction removed the gateway path, termination exited143 in4.311s, completion/lifecycle survived cleanup and no resources/ephemeral secrets remained. See [T08 report](docs/T08_REPORT.md) for exact evidence, initial observer/fixture fixes and limitations. Only gateway/demo images changed. No real Codex work. Continue T09; live Jev/Claude trials authorized as necessary, with private host key preserved.
+
+Working commands: .venv/bin/aictrl dashboard --no-open, make verify-reporting, make verify-reporting-response. Dashboard startup is local and frontend assets require no Internet. T09/T10 will qualify production regression, deterministic rehearsal, warm timings and final clean start.
+
 ## T07 checkpoint — 2026-10-04 Europe/Berlin — PASS / COMPLETE
 
 The user separately authorized T07 after accepting T06 with real Codex deferred. One implementing agent, no delegation. Atomic governance, request-bound approvals, immutable policy/threat-feed reload and lifetime runaway limits are complete. T08 remains TODO; stop here. Full data model, atomicity/lifecycle, exact file inventory, schemas, limits and T08 interfaces are in [docs/T07_REPORT.md](docs/T07_REPORT.md). Historical notes below retain their then-current state, including all T06 Codex failures. No real Codex invocation or investigation occurred in T07.

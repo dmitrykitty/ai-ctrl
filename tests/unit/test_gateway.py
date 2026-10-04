@@ -38,7 +38,7 @@ class Frames(httpx.AsyncByteStream):
 def native_policy(*, enabled=True, action='ALLOW', version='t03'):
     rule = AdmissionRule(id='native.messages', channel='LLM', direction='OUTBOUND', protocol='ANTHROPIC_MESSAGES',
                          target='anthropic', operations=('messages', 'count_tokens'), action=action)
-    return Policy(schema_version=4, policy_version=version, default_action='BLOCK',
+    return Policy(schema_version=5, policy_version=version, default_action='BLOCK',
                   agents={'claude': AgentPolicy(enabled=enabled, rules=(rule,))})
 
 

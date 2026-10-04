@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,6 +26,8 @@ from aictrl.governance.budgets import BudgetManager
 from aictrl.governance.store import GovernanceStore
 from aictrl.governance.reload import ConfigSnapshotManager
 from aictrl.guards.threat_feed import ThreatFeed
+from aictrl.reporting.service import ReportingStore
+from aictrl.reporting.sink import StoreFailure
 
 
 def create_app(session: GatewaySession, policy: Policy, store: EventSink,
@@ -37,6 +40,7 @@ def create_app(session: GatewaySession, policy: Policy, store: EventSink,
         raise ValueError('Inconsistent trusted gateway agent identity.')
     handler = resolve_handler(session.protocol)
     governance = governance_store or (GovernanceStore(store.path) if isinstance(store, EventStore) else None)
+    reporting = ReportingStore(store.path) if isinstance(store, EventStore) else None
     @asynccontextmanager
     async def lifespan(app):
         owned = client is None
@@ -49,16 +53,24 @@ def create_app(session: GatewaySession, policy: Policy, store: EventSink,
                                       transport=httpx.AsyncHTTPTransport(retries=0))
         provider = semantic_provider or JevSemanticProvider(jev_client, semantic_key)
         snapshots = ConfigSnapshotManager(policy, provider, feed=feed, policy_path=policy_path, feed_path=feed_path)
-        app.state.snapshots, app.state.governance = snapshots, governance
+        app.state.snapshots, app.state.governance, app.state.reporting = snapshots, governance, reporting
         current = snapshots.capture()
         budgets = BudgetManager(governance) if governance else None
         app.state.gateway = ControlPipeline(session, current.engine, store, upstream, handler, current.guards,
-                                            snapshots=snapshots, governance=budgets)
+                                            snapshots=snapshots, governance=budgets, reporting=reporting)
         app.state.mcp = MCPControlService(session, current.engine, current.guards, store, backend or DemoMCPBackend(),
-                                         snapshots=snapshots, governance=budgets)
+                                         snapshots=snapshots, governance=budgets, reporting=reporting)
         mcp_app = http_app(create_mcp_server(lambda: app.state.mcp))
         app.state.mcp_http_app = mcp_app
-        watcher = asyncio.create_task(snapshots.watch())
+        def status_report():
+            if reporting is not None:
+                try:
+                    reporting.status(session.session_id, snapshots.capture(), snapshots.status(),
+                                     'explicit-offline-fixture' if semantic_provider else 'configured' if semantic_key else 'unavailable')
+                except StoreFailure:
+                    logging.getLogger('aictrl.reporting').warning('Control status persistence unavailable for session %s', session.session_id)
+        status_report()
+        watcher = asyncio.create_task(snapshots.watch(status_report))
         try:
             async with mcp_app.router.lifespan_context(mcp_app):
                 yield

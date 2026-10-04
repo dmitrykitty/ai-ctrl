@@ -61,7 +61,7 @@ class ThirdAdapter:
 def third_policy():
     rule = AdmissionRule(id='third.responses', channel='LLM', direction='OUTBOUND', protocol='RESPONSES',
                          target='openai', operations=('responses',), action='ALLOW')
-    return Policy(schema_version=4, policy_version='synthetic-extension', default_action='BLOCK',
+    return Policy(schema_version=5, policy_version='synthetic-extension', default_action='BLOCK',
                   agents={'synthetic-third': AgentPolicy(enabled=True, rules=(rule,))})
 
 

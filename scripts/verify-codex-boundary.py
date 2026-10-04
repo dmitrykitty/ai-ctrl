@@ -21,6 +21,7 @@ from aictrl.runtime.codex_auth import codex_authenticated
 from aictrl.runtime.auth import AuthenticationCheckError
 from aictrl.runtime.supervisor import RuntimeSupervisor
 from aictrl.runtime.workspace import PROJECT_ROOT
+from demo_support import notify_policy
 
 
 def clean_session(identifier):
@@ -91,6 +92,7 @@ def main():
             (project/'config').mkdir(parents=True); (project/'docker').mkdir(); workspace.mkdir(mode=0o750)
             for file in ('config/policy.yaml','config/threat-feed.json','docker/compose.yaml'):
                 shutil.copyfile(PROJECT_ROOT/file, project/file)
+            notify_policy(project/'config/policy.yaml')
             shutil.copyfile(PROJECT_ROOT/'tests/fixtures/codex_probe.py',workspace/'codex_probe.py')
             (workspace/'input.txt').write_text('host workspace\n')
             before = workspace.stat()

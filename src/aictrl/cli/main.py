@@ -18,6 +18,49 @@ from aictrl.governance.store import ApprovalRecord, GovernanceStore
 app = typer.Typer(help="AI Control Layer — isolated coding-agent supervisor.", no_args_is_help=True)
 
 
+@app.command()
+def dashboard(host: Annotated[str, typer.Option(help='Loopback IP only.')] = '127.0.0.1',
+              port: Annotated[int, typer.Option(min=1024, max=65535)] = 8787,
+              open_browser: Annotated[bool, typer.Option('--open/--no-open', help='Open local dashboard in the default browser.')] = True) -> None:
+    """Serve the local read-only dashboard; no external frontend assets."""
+    import socket
+    import webbrowser
+    import uvicorn
+    from aictrl.dashboard.app import create_dashboard, loopback
+    from aictrl.reporting.queries import ReportingQueries
+    from aictrl.reporting.service import ReportingStore
+    try:
+        loopback(host)
+        settings = load_config(PROJECT_ROOT)
+        directory = PROJECT_ROOT / settings.gateway.audit_directory
+        if directory.is_symlink():
+            raise ValueError('Unsafe reporting directory.')
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        directory.chmod(0o700)
+        path = directory / 'events.sqlite3'
+        ReportingStore(path)
+        GovernanceStore(path)
+        listener = socket.socket(socket.AF_INET6 if ':' in host else socket.AF_INET, socket.SOCK_STREAM)
+        listener.bind((host, port))
+        listener.listen(128)
+        url = f'http://[{host}]:{port}' if ':' in host else f'http://{host}:{port}'
+        typer.echo('AICTRL dashboard: ' + url)
+        if open_browser:
+            try:
+                webbrowser.open(url)
+            except webbrowser.Error:
+                pass
+        server = uvicorn.Server(uvicorn.Config(create_dashboard(ReportingQueries(path, PROJECT_ROOT)),
+                                               access_log=False, log_level='warning'))
+        try:
+            server.run(sockets=[listener])
+        finally:
+            listener.close()
+    except (ValueError, OSError, StoreFailure):
+        typer.echo('Dashboard unavailable. Check loopback bind, port and protected reporting storage.', err=True)
+        raise typer.Exit(2) from None
+
+
 def governance(project: Path) -> GovernanceStore:
     project = project.resolve()
     settings = load_config(project)
