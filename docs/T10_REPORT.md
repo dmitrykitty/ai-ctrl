@@ -57,7 +57,7 @@ The user-requested private Jev host input remains outside the repository at mode
 
 Known limits: local single-host dashboard without external authentication; latest durable gateway observation is not a continuous provider-health probe; legacy audit has no invented lifecycle; aggregate latency uses up to 2000 recent samples per stage; full-stream timing includes provider/backpressure; risk expires with the rolling window while historical alerts remain; subscription monetary cost is unknown; request-time token reservation is conservative, with observed usage settled afterward. Demo reset safely refuses shared-scope accounting. Raw payloads and universal local-file auditing are outside scope. Native real Codex T06+ output compatibility remains fail-closed and deferred.
 
-Separate local milestone commits preserve T07, T08, T09 and the final T10 changes. No push is performed; the worktree is clean at closure.
+The T07, T08, T09 and T10 milestone commits (5e93c1a, 12c689e, bcc38dd and 5bc6d12) are present on origin/main. The worktree is clean at milestone closure.
 
 ## Tomorrow
 
@@ -161,6 +161,6 @@ T08→T10 additions after the preserved T07 checkpoint (5e93c1a); T07 inventory 
 
 Nine stages passed. No live dependency is required by the judge; separately recorded real Claude and Jev passed in T09. No additional full suite or live retry followed the final judge. Documentation-only closure does not rerun qualification.
 
-Safe artifacts remain in ignored .aictrl/qualifications: t10-final-judge.json, t09-final-judge.json, final-claude.json, final-jev.json, t10-clean-start.json, t10-reporting-performance.json and t10-repository-scan.json. Exact T08–T10 inventory is 28 added / 37 changed files as listed above. T07's previously local implementation and inventory are preserved separately.
+Safe artifacts remain in ignored .aictrl/qualifications: t10-final-judge.json, t09-final-judge.json, final-claude.json, final-jev.json, t10-clean-start.json, t10-reporting-performance.json and t10-repository-scan.json. Exact T08–T10 inventory is 28 added / 37 changed files as listed above. T07's checkpoint implementation and inventory are preserved separately.
 
 **STOP before T11. No slides, PDF, recording or submission work is started.**

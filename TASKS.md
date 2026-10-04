@@ -2,6 +2,8 @@
 
 Owner for every task: single implementing agent. Dependencies and acceptance follow `plan.md` and the supplied milestone instructions. T01–T10/T05H are COMPLETE. T06 closed under the user's explicit decision to defer Codex's unresolved regression and proceed with working Claude/Jev/MCP; Codex is not live-qualified for T06/T07. T07 was separately authorized and passed under the preserved boundary. Overnight T08→T09→T10 is authorized; stop before T11. The inner Codex sandbox remains disabled only inside AICTRL's Docker boundary; web search is disabled.
 
+Milestone acceptance rows retain the schema and scope qualified at each checkpoint. Current policy is schema 5/version t08, introduced in T08; T07 governance and T08 dashboard/risk/alerts/restrict/terminate are implemented.
+
 | ID | Description | Dependencies | Status | Acceptance criteria | Affected modules |
 |---|---|---|---|---|---|
 | T01 | Contracts, reused assets, images, authentication | None | COMPLETE | Python 3.12.15/uv/lock ready; 40 offline tests and 10 real authentication-boundary probes pass; pinned actual Claude 2.1.285 verified; dedicated state persistence verified; native status reports authenticated; repeated login exits 0 without a new browser flow. Project environment prefix standardized; security boundary preserved. Coordination and MIT reuse records updated. | adapters, cli, contracts, docker, config, scripts, tests, docs |

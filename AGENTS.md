@@ -1,6 +1,6 @@
 # AI Control Layer
 
-Read `NOTES.md` and `plan.md` before work. The approved plan, including user-authorized milestone amendments, is the architecture source of truth. T01–T10/T05H are COMPLETE. The separate OVERNIGHT FINALIZATION instruction authorizes sequential T08→T09→T10; continue between those milestones and STOP before T11. T08/T09/T10 are COMPLETE; FEATURE FREEZE was respected. Do not begin more milestone work without a separate instruction. Preserve the local T07 source of truth and do not redesign it. Native Codex's real T06 regression remains deferred; do not run or investigate it. The user subsequently authorized as many necessary Jev/Claude Code tests as needed for a correct result, overriding the overnight instruction's single-live-trial limit. Preserve test discipline and secure key handling. Codex's packaged full-access profile applies only inside AICTRL Docker, never to host configuration.
+Read `NOTES.md` and `plan.md` before work. The approved plan, including user-authorized milestone amendments, is the architecture source of truth. T01–T10/T05H are COMPLETE. The separate OVERNIGHT FINALIZATION instruction authorized sequential T08→T09→T10, now complete; STOP before T11. T08/T09/T10 are COMPLETE; FEATURE FREEZE was respected. Do not begin more milestone work without a separate instruction. Preserve the local T07 source of truth and do not redesign it. Native Codex's real T06 regression remains deferred; do not run or investigate it. The user subsequently authorized as many necessary Jev/Claude Code tests as needed for a correct result, overriding the overnight instruction's single-live-trial limit. Preserve test discipline and secure key handling. Codex's packaged full-access profile applies only inside AICTRL Docker, never to host configuration.
 
 ## Goal and architecture
 
@@ -53,7 +53,9 @@ Documentation-only changes do not require rerunning tests.
 Prefer targeted feedback loops measured in seconds over full-suite feedback loops measured in minutes.
 
 
-## T05H checkpoint
+## Historical T05H checkpoint
+
+Historical milestone snapshots below retain their checkpoint-specific schema versions, scope and verification instructions. Current project status is in TASKS.md; T01–T10 are complete, current policy is schema 5/version t08, and T08 reporting/risk/alerts/host response are implemented.
 
 Trusted runtime/handler registries replace brand selection; RuntimeSupervisor creates one identity/token and renders once. Native commands belong to adapters; Compose uses validated code-owned provider-state metadata and stable volume leases. Independent native handlers compose with gateway/control.py ControlPipeline. Policy configuration is schema 2, version t05h, with exact enabled-agent rules and BLOCK precedence; shared contracts remain unchanged schema 1. EventSink.append must commit durably before returning; SQLite WAL/FULL and safe audit remain the actual backend. No guards/MCP/governance/distributed services were added.
 
@@ -71,7 +73,7 @@ T06 final offline suite passed 380 tests; focused gateway/Codex/demo Docker chec
 
 At this T06 checkpoint, T07 was not yet authorized or implemented. The subsequent separate specification and completed checkpoint below supersede that historical boundary. T06's failed real Codex evidence remains unchanged.
 
-## T07 checkpoint and next boundary
+## Historical T07 checkpoint
 
 Policy schema 4/version t07 and feed schema 1 use immutable per-request snapshots, 500 ms validated atomic reload and independent last-good retention. Shared contracts remain byte-identical schema 1. Protected config directory mounts read-only in gateway alone. Ordered guards are secret → PII → literal/restricted-regex feed → relevant Jev; no semantic feed signatures or production fallback.
 
@@ -83,7 +85,7 @@ T07 final make test: 435 passed in 6.73 seconds. Actual Docker checks 47 gateway
 
 The user explicitly requested preserving today's private host Jev input file; it remains outside the repo at mode0600/parent0700. Runtime-staged gateway copies are still removed normally. T08 may consume safe EventStore, BudgetState/UsageMetric/Approval projections, governance_audit and snapshot health through host reporting and existing runtime hooks. Do not start dashboard/risk/alerts/automatic restriction or termination without the separate T08 instruction.
 
-## T09 / feature freeze
+## Historical T09 / feature freeze
 
 T09 offline judge470 +55/30 + real Docker47/27/42 synthetic/33/27 passed. One final real Claude and one production Jev/MCP regression passed with durable lifecycle/latency/settlement and cleanup. No real Codex. T10 permits only bug/reliability/UX/docs/test-determinism fixes, clean-start rehearsal and final qualification; no features/providers/pages/guards/refactors/dependencies. Use make demo-ready, local dashboard and make demo-rehearsal. Run the final make verify-final once after stabilization; do not rerun it for subsequent docs-only edits. Preserve native volumes/workspace/audit and private host key input. Stop before T11.
 
