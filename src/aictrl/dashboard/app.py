@@ -108,7 +108,7 @@ def create_dashboard(queries: ReportingQueries) -> FastAPI:
     def detail(session: UUID):
         try:
             content = queries.detail(session)
-            content['status'] = queries.status()
+            content['status'] = queries.status(session)
             error = None
         except (StoreFailure, ValueError):
             content, error = {}, 'Reporting data temporarily unavailable. Retry shortly.'
@@ -119,7 +119,7 @@ def create_dashboard(queries: ReportingQueries) -> FastAPI:
     def detail_api(session: UUID):
         try:
             content = queries.detail(session)
-            content['status'] = queries.status()
+            content['status'] = queries.status(session)
             return content
         except (StoreFailure, ValueError):
             return JSONResponse({'error': 'Reporting data temporarily unavailable.'}, status_code=503)

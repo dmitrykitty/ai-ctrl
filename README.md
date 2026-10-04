@@ -1,6 +1,6 @@
 # AI Control Layer
 
-T01–T09/T05H are complete; T10 stabilization is in progress under feature freeze. Actual agents run inside the shared Docker boundary, with native application gateways, secret/PII and Jev guards, MCP authorization, atomic governance and safe local reporting. Current supported **real live proof: Claude Code**. Native Codex's T06 output-inspection regression remains deferred; synthetic Responses qualification does not claim a current real Codex success.
+T01–T10/T05H are complete. T10 stabilization passed under feature freeze. Actual agents run inside the shared Docker boundary, with native application gateways, secret/PII and Jev guards, MCP authorization, atomic governance and safe local reporting. Current supported **real live proof: Claude Code**. Native Codex's T06 output-inspection regression remains deferred; synthetic Responses qualification does not claim a current real Codex success.
 
 ## Quick demo
 
@@ -13,7 +13,7 @@ From this checkout with the existing frozen environment/images:
 
 The dashboard has Overview, Sessions, Events, Policies, Budgets and Alerts with local assets and about two-second refresh. **--no-open** avoids automatic browser opening. **make demo-reset** clears only terminal, explicitly offline-demo history; native history, source, workspace and authentication volumes are preserved. It refuses active or shared-scope demo accounting.
 
-**make verify-final** runs the complete offline judge, including actual Docker boundary/response proofs. It does not run live Claude, Codex or Jev. Detailed evidence: [T09 report](docs/T09_REPORT.md), [T08 report](docs/T08_REPORT.md), [T07 report](docs/T07_REPORT.md), [T06 report](docs/T06_REPORT.md), [notes](NOTES.md) and [approved plan](plan.md). T11 presentation/submission work is not started.
+**make verify-final** runs the complete offline judge, including actual Docker boundary/response proofs. It does not run live Claude, Codex or Jev. Exact tomorrow commands: [short demo guide](docs/DEMO.md). Detailed evidence: [overnight/T10 report](docs/T10_REPORT.md), [T09 report](docs/T09_REPORT.md), [T08 report](docs/T08_REPORT.md), [T07 report](docs/T07_REPORT.md), [T06 report](docs/T06_REPORT.md), [notes](NOTES.md) and [approved plan](plan.md). T11 presentation/submission work is not started.
 
 ## Prepare and authenticate
 

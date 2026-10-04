@@ -15,6 +15,9 @@ from aictrl.adapters.demo import DemoAgentAdapter
 from aictrl.contracts import SecurityEvent
 from aictrl.governance.store import GovernanceStore
 from aictrl.policy.models import RiskSettings, ResponseSettings
+from aictrl.policy.loader import load_policy
+from aictrl.governance.reload import ConfigSnapshotManager
+from aictrl.governance.store import BudgetClaim
 from aictrl.reporting.queries import ReportingQueries, percentiles
 from aictrl.reporting.risk import RiskEngine
 from aictrl.reporting.service import ReportingStore
@@ -123,6 +126,43 @@ def test_stage_percentiles_and_durable_samples(tmp_path):
     for invalid in (float('nan'),-1,float('inf')):
         with pytest.raises(ValueError): store.latency(sid,uuid4(),{'total':invalid})
     with pytest.raises(ValueError): store.latency(sid,uuid4(),{'raw-payload':1})
+
+
+def test_semantic_summary_excludes_offline_fixtures_and_risk_uses_own_snapshot(tmp_path):
+    store,queries,clock=environment(tmp_path)
+    real,fixture=uuid4(),uuid4()
+    manager=ConfigSnapshotManager(load_policy(tmp_path/'config/policy.yaml'))
+    for sid,kind,semantic in ((real,'native','configured'),(fixture,'offline-demo','explicit-offline-fixture')):
+        store.start_session(sid,'demo-agent','demo-agent',None,clock(),kind=kind)
+        store.status(sid,manager.capture(),manager.status(),semantic)
+        store.latency(sid,uuid4(),{'semantic_jev':200 if sid==real else 0.1,'total':201})
+    assert queries.latency()['semantic_jev']=={'count':1,'p50':200,'p95':200,'p99':200}
+    assert queries.latency(fixture)['semantic_jev']['p50']==0.1
+    assert queries.status(fixture)['session_kind']=='offline-demo'
+    risk=RiskSettings(thresholds={'medium':1,'high':2,'critical':3})
+    policy=manager.capture().policy.model_copy(update={'risk':risk,'policy_version':'response-case'})
+    own=ConfigSnapshotManager(policy)
+    store.status(fixture,own.capture(),own.status(),'explicit-offline-fixture')
+    record(store,event(clock,fixture),risk)
+    store.status(real,manager.capture(),manager.status(),'configured')  # latest global observation has different thresholds
+    assert queries.risk(fixture)['severity']=='CRITICAL'
+    assert next(row for row in queries.sessions()['items'] if row['session_id']==str(fixture))['risk']['severity']=='CRITICAL'
+
+
+def test_budget_warning_reserved_and_lazy_approval_expiry_counts(tmp_path):
+    store,queries,clock=environment(tmp_path);sid=uuid4()
+    governance=GovernanceStore(store.path,clock=clock)
+    claim=BudgetClaim('demo.tools','session',str(sid),'tool_calls',10,60,8)
+    admitted=governance.reserve((claim,),session_id=sid,request_id=uuid4(),policy_version='test',snapshot_key='fixture')
+    assert admitted.reservation
+    governance.dispatch(admitted.reservation)
+    item=queries.budgets(sid)[0]
+    assert item['used']==8 and item['reserved']==0 and item['percentage']==80 and item['status']=='WARNING'
+    governance.reserve((),session_id=sid,request_id=uuid4(),policy_version='test',snapshot_key='fixture',
+                       approval_digest='a'*64,operation_id='tool.destructive_delete_all',approval_ttl=1)
+    assert queries.summary()['pending_approvals']==1
+    clock.advance(2)
+    assert queries.summary()['pending_approvals']==0 and queries.summary()['approval_states']['EXPIRED']==1
 
 
 def test_malformed_storage_and_unavailable_database_fail_safely(tmp_path):

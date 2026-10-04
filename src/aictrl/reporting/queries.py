@@ -54,13 +54,19 @@ class ReportingQueries:
             if db is not None:
                 db.close()
 
-    def status(self) -> dict:
+    def status(self, session: UUID | None = None) -> dict:
         with self.read() as db:
-            row = db.execute('SELECT safe_json,updated_at FROM control_status ORDER BY updated_at DESC LIMIT 1').fetchone()
+            row = db.execute('''SELECT c.safe_json,c.updated_at,s.kind FROM control_status c LEFT JOIN sessions s USING(session_id)
+                WHERE (? IS NULL OR c.session_id=?) ORDER BY c.updated_at DESC LIMIT 1''',
+                (str(session) if session else None, str(session) if session else None)).fetchone()
             if row:
                 status = ControlStatus.model_validate_json(row['safe_json']).model_dump(mode='json')
                 status['observed_at'] = DATE.validate_python(row['updated_at']).isoformat()
-                status['source'] = 'Latest gateway observation'
+                kind = row['kind'] or 'unknown'
+                if kind not in (*KINDS, 'unknown'):
+                    raise ValueError('Invalid observation kind.')
+                status['source'] = 'Latest gateway observation · ' + kind
+                status['session_kind'] = kind
             else:
                 policy = load_policy(self.project / 'config/policy.yaml')
                 manager = ConfigSnapshotManager(policy, feed=load_feed(self.project / 'config/threat-feed.json'))
@@ -116,7 +122,7 @@ class ReportingQueries:
             return {'items': items, 'total': total, 'page': page, 'limit': limit}
 
     def risk(self, session: UUID, settings: RiskSettings | None = None) -> dict:
-        settings = settings or RiskSettings.model_validate(self.status()['risk'])
+        settings = settings or RiskSettings.model_validate(self.status(session)['risk'])
         now = self.clock().timestamp()
         with self.read() as db:
             rows = db.execute('SELECT rule_id,COUNT(*),SUM(points) FROM risk_contributions WHERE session_id=? AND occurred_at>? AND occurred_at<=? GROUP BY rule_id ORDER BY SUM(points) DESC LIMIT 128',
@@ -133,10 +139,10 @@ class ReportingQueries:
             raise ValueError('Invalid pagination.')
         settings = RiskSettings.model_validate(self.status()['risk'])
         with self.read() as db:
-            rows = db.execute('''SELECT session_id,agent_id,adapter,protocol,state,started_at,ended_at,kind FROM sessions
+            rows = db.execute('''SELECT history.*,c.safe_json FROM (SELECT session_id,agent_id,adapter,protocol,state,started_at,ended_at,kind FROM sessions
                 UNION ALL SELECT e.session_id,MAX(e.agent_id),MAX(e.adapter),MAX(e.protocol),'LEGACY',MIN(e.timestamp),NULL,'legacy-audit'
                 FROM events e WHERE NOT EXISTS(SELECT 1 FROM sessions s WHERE s.session_id=e.session_id) GROUP BY e.session_id
-                ORDER BY started_at DESC LIMIT ? OFFSET ?''', (limit, (page-1)*limit)).fetchall()
+                ) history LEFT JOIN control_status c USING(session_id) ORDER BY started_at DESC LIMIT ? OFFSET ?''', (limit, (page-1)*limit)).fetchall()
             items = []
             for row in rows:
                 sid = UUID(row['session_id'])
@@ -153,7 +159,7 @@ class ReportingQueries:
                               'duration_seconds': max(0, ((ended or self.clock())-started).total_seconds()) if state != 'LEGACY' else None,
                               'requests': counts[0], 'blocked': counts[1] or 0, 'tokens': tokens,
                               'alerts': db.execute('SELECT COUNT(*) FROM alerts WHERE session_id=?', (str(sid),)).fetchone()[0],
-                              'risk': self.risk(sid, settings)})
+                              'risk': self.risk(sid, ControlStatus.model_validate_json(row['safe_json']).risk if row['safe_json'] else settings)})
             total = db.execute('SELECT COUNT(DISTINCT session_id) FROM (SELECT session_id FROM sessions UNION SELECT session_id FROM events)').fetchone()[0]
             return {'items': items, 'total': total, 'page': page, 'limit': limit}
 
@@ -186,8 +192,11 @@ class ReportingQueries:
 
     def latency(self, session: UUID | None = None) -> dict:
         with self.read() as db:
-            return {stage: percentiles([row[0] for row in db.execute('SELECT latency_ms FROM latency_samples WHERE stage=? AND (? IS NULL OR session_id=?) ORDER BY timestamp DESC LIMIT 2000',
-                      (stage, str(session) if session else None, str(session) if session else None))]) for stage in STAGES}
+            return {stage: percentiles([row[0] for row in db.execute('''SELECT latency_ms FROM latency_samples l WHERE stage=? AND (? IS NULL OR session_id=?)
+                AND (?!='semantic_jev' OR ? IS NOT NULL OR EXISTS(SELECT 1 FROM control_status c WHERE c.session_id=l.session_id
+                    AND json_extract(c.safe_json,'$.semantic.status')='configured'))
+                ORDER BY timestamp DESC LIMIT 2000''',
+                      (stage, str(session) if session else None, str(session) if session else None, stage, str(session) if session else None))]) for stage in STAGES}
 
     def overview(self) -> dict:
         sessions = self.sessions(limit=50)['items']

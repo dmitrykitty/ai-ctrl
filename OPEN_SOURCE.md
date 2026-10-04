@@ -90,3 +90,7 @@ Jinja2 3.1.6 (BSD-3-Clause) is pinned directly for the local server-rendered das
 ## T09 verification and preparation
 
 The offline judge, preflight, scoped reset and safe privacy/cleanup scripts are project code using the standard library and existing locked packages. The deterministic rehearsal reuses the official pinned MCP SDK clients, the attributed Docker boundary and production SQLite/policy/governance; its semantic fixture is explicitly labelled and remains outside the production factory. No new dependency, downloaded UI asset, native agent binary or copied third-party code is introduced.
+
+## T10 stabilization
+
+Reporting provenance/numeric corrections, accessible refresh and date labels, focused regressions and the short demo guide modify project-owned code only. Existing pins, image identities, provider terms and MIT attribution remain unchanged. No package, UI asset, native binary or third-party source was added; no unchanged image was rebuilt.
