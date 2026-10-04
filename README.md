@@ -1,8 +1,19 @@
 # AI Control Layer
 
-T01–T07/T05H are complete. T06 adds shared secret/PII guards, bounded native output inspection, external TypeSafe Jev and authorized MCP tools/protected memory. T07 adds atomic budgets, exact-request host approvals and policy/threat-feed reload. Claude Code 2.1.285 and Codex CLI 0.159.3 retain separate native protocols and isolated provider state; current provider qualification is described below. The stateless demo uses the same Docker boundary with no provider credentials or LLM. Evidence and limitations are in the [T06 report](docs/T06_REPORT.md), [T07 report](docs/T07_REPORT.md), [verification notes](NOTES.md) and approved [plan](plan.md).
+T01–T09/T05H are complete; T10 stabilization is in progress under feature freeze. Actual agents run inside the shared Docker boundary, with native application gateways, secret/PII and Jev guards, MCP authorization, atomic governance and safe local reporting. Current supported **real live proof: Claude Code**. Native Codex's T06 output-inspection regression remains deferred; synthetic Responses qualification does not claim a current real Codex success.
 
-T06 is closed under the user's explicit acceptance of working Claude/Jev/MCP while deferring Codex. Real Codex currently fails at output inspection with guard.output.invalid and does not complete the task; no live retry occurred in T07. Separately authorized T07 is COMPLETE: atomic governance/approvals/reload, 435 offline tests, Docker 47/27/42 synthetic Codex checks, production MCP/Jev 33/33 and real Claude exact response/usage settlement/cleanup. Current evidence and limitations are in [T07 report](docs/T07_REPORT.md), including the initial quota rejection and disclosed context email redaction. Stop before T08; real Codex remains deferred.
+## Quick demo
+
+From this checkout with the existing frozen environment/images:
+
+1. Run **make demo-ready** — checks prerequisites in seconds, without rebuilding.
+2. Run **.venv/bin/aictrl dashboard** — local dashboard at http://127.0.0.1:8787; keep this terminal open.
+3. In a second terminal run **make demo-rehearsal** — actual Docker/MCP/control/SQLite and explicit offline semantic fixtures; no paid provider call. Safe history populates the dashboard.
+4. Optional real Claude: **.venv/bin/aictrl run claude demo/project --prompt 'Reply with exactly: AICTRL_DEMO_OK' --timeout 90**.
+
+The dashboard has Overview, Sessions, Events, Policies, Budgets and Alerts with local assets and about two-second refresh. **--no-open** avoids automatic browser opening. **make demo-reset** clears only terminal, explicitly offline-demo history; native history, source, workspace and authentication volumes are preserved. It refuses active or shared-scope demo accounting.
+
+**make verify-final** runs the complete offline judge, including actual Docker boundary/response proofs. It does not run live Claude, Codex or Jev. Detailed evidence: [T09 report](docs/T09_REPORT.md), [T08 report](docs/T08_REPORT.md), [T07 report](docs/T07_REPORT.md), [T06 report](docs/T06_REPORT.md), [notes](NOTES.md) and [approved plan](plan.md). T11 presentation/submission work is not started.
 
 ## Prepare and authenticate
 
@@ -16,7 +27,7 @@ make claude-auth-status
 make claude-login
 ```
 
-Preparation builds the native runtime, proxy and gateway images. `make runtime-image` reuses the installed T02 Claude binary and changes only bootstrap files; `make gateway-image` installs hash-locked dependencies in a digest-pinned Python image. Its temporary build context contains only source and public requirements. Actual local image identities and installer checksums are in `docker/images.lock.json`; qualification is Linux/amd64.
+One-time preparation builds the native runtime, proxy, gateway and scripted demo images. Use make demo-ready for subsequent checks. `make runtime-image` reuses the installed T02 Claude binary and changes only bootstrap files; `make gateway-image` installs hash-locked dependencies in a digest-pinned Python image. Its temporary build context contains only source and public requirements. Actual local image identities and installer checksums are in `docker/images.lock.json`; qualification is Linux/amd64.
 
 Authentication uses only `aictrl-claude-state` at `/home/dev/.claude`. The status helper mounts it read-only, drops capabilities and reports only authenticated/unauthenticated or a safe error. Login checks status first and exits successfully without a browser when already authenticated. Host Claude, SSH, AWS and Kubernetes state is never mounted. See [authentication instructions](docs/claude-authentication.md).
 

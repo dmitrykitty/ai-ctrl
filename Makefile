@@ -3,6 +3,19 @@
 .PHONY: benchmark-gateway
 .DEFAULT_GOAL := bootstrap
 
+.PHONY: demo-ready demo-rehearsal demo-reset verify-final
+demo-ready:
+	./scripts/uv.sh run --frozen python scripts/demo-ready.py
+
+demo-rehearsal:
+	./scripts/uv.sh run --frozen python scripts/demo-rehearsal.py
+
+demo-reset:
+	./scripts/uv.sh run --frozen python scripts/demo-reset.py
+
+verify-final:
+	./scripts/uv.sh run --frozen python scripts/verify-final.py
+
 .PHONY: verify-reporting verify-reporting-response
 verify-reporting:
 	./scripts/uv.sh run --frozen python scripts/verify-reporting.py
@@ -51,8 +64,8 @@ codex-login:
 bootstrap:
 	./scripts/bootstrap.sh
 
-# Dashboard/demo preparation comes in T09; T06 uses external Jev.
-prepare: bootstrap runtime-image proxy-image gateway-image
+# One-time setup; subsequent demo-ready only checks existing prerequisites.
+prepare: bootstrap runtime-image proxy-image gateway-image demo-image
 
 test:
 	./scripts/uv.sh run --frozen pytest

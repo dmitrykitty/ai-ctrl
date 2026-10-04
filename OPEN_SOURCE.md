@@ -86,3 +86,7 @@ The already attributed `docker/base/entrypoint.sh` gains only an explicit runtim
 ## T08 local dashboard
 
 Jinja2 3.1.6 (BSD-3-Clause) is pinned directly for the local server-rendered dashboard; it was already in the locked dependency closure. MarkupSafe remains its existing BSD-3-Clause dependency. Installed distribution notices are retained in the frozen environment/image. CSS, vanilla JavaScript, SVG icons, reporting/risk/response logic and host-only demo orchestration are new project code; no external font/chart/React/Node assets were copied. Existing MIT agent-sandbox attribution/pin, native binaries and provider terms are unchanged.
+
+## T09 verification and preparation
+
+The offline judge, preflight, scoped reset and safe privacy/cleanup scripts are project code using the standard library and existing locked packages. The deterministic rehearsal reuses the official pinned MCP SDK clients, the attributed Docker boundary and production SQLite/policy/governance; its semantic fixture is explicitly labelled and remains outside the production factory. No new dependency, downloaded UI asset, native agent binary or copied third-party code is introduced.
